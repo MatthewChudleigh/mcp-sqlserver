@@ -255,6 +255,8 @@ claude mcp add mssql-readonly -s user \
 
 Run `claude mcp list` and confirm the mssql-readonly server shows as connected.
 
-Tell the user: **Setup complete! Start a new Claude Code session and try "Test the SQL Server connection" or "List all tables in the database".**
+Tell the user: **Setup complete! You must restart your Claude Code session for the MCP server to load. Start a new session and try "Test the SQL Server connection" or "List all tables in the database".**
+
+Note: MCP servers are loaded at session startup. The server will NOT be available in the current session — the user must start a new one.
 
 Note: The MCP server will only be available in **new** Claude Code sessions, not the current one.
