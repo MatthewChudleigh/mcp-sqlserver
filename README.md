@@ -1,376 +1,239 @@
-# MCP SQL Server
+# MSSQL Read-Only MCP Server for Claude Code
 
-A read-only Model Context Protocol (MCP) server for Microsoft SQL Server that enables AI agents to safely explore and query SQL Server databases.
+An MCP (Model Context Protocol) server that lets Claude Code run read-only queries against Microsoft SQL Server. Supports SQL auth and Azure AD. All connections use `ApplicationIntent=ReadOnly` and queries are validated to block any write operations.
 
-## Quick Start
+Based on [bilims/mcp-sqlserver](https://github.com/bilims/mcp-sqlserver) with added Azure AD authentication, hardcoded read-only intent, and automatic schema caching.
 
-### Step 1: Install the Package
+## Tools
 
-```bash
-# Global installation (recommended)
-npm install -g @bilims/mcp-sqlserver
+| Tool | Purpose |
+|------|---------|
+| `execute_query` | Run read-only SELECT queries. Automatically includes the full database schema on first call. |
+| `list_tables` | List all tables in a database or schema |
+| `list_views` | List all views in a database or schema |
+| `describe_table` | Get column details for a specific table |
+| `get_foreign_keys` | Get foreign key relationships |
+| `get_table_stats` | Get row counts and table sizes |
+| `list_databases` | List all databases on the server |
+| `get_server_info` | Get SQL Server version and edition |
+| `test_connection` | Verify the connection works |
+| `snapshot_schema` | Force-regenerate the schema cache file |
 
-# Verify installation
-mcp-sqlserver --version
-```
+## Read-Only Safety
 
-### Step 2: Configure Your SQL Server Connection
+Three independent layers prevent any write operations:
 
-Choose your SQL Server type and follow the configuration:
+1. **Connection level** — `ApplicationIntent=ReadOnly` is hardcoded (routes to read replicas when available)
+2. **Query validation** — Only `SELECT` and `WITH` statements are allowed. 17 keywords are blocked (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `EXEC`, `GRANT`, etc.) plus SQL injection pattern detection
+3. **Database permissions** — Use a `db_datareader`-only account for defense in depth
 
-#### Azure SQL Database
-```bash
-export SQLSERVER_HOST="your-server.database.windows.net"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
-export SQLSERVER_DATABASE="your-database"
-export SQLSERVER_ENCRYPT="true"
-export SQLSERVER_TRUST_CERT="false"
-```
+## Setup
 
-#### On-Premises SQL Server
-```bash
-export SQLSERVER_HOST="your-sql-server.company.com"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
-export SQLSERVER_DATABASE="your-database"
-export SQLSERVER_ENCRYPT="true"
-export SQLSERVER_TRUST_CERT="true"  # For self-signed certificates
-```
+### Prerequisites
 
-#### Local SQL Server Express
-```bash
-export SQLSERVER_HOST="localhost\\SQLEXPRESS"
-export SQLSERVER_USER="sa"
-export SQLSERVER_PASSWORD="your-password"
-export SQLSERVER_DATABASE="master"
-export SQLSERVER_ENCRYPT="false"
-export SQLSERVER_TRUST_CERT="true"
-```
+- **Node.js 18+**
+- **Claude Code**
+- **Azure CLI** (only if using Azure AD auth): https://learn.microsoft.com/en-us/cli/azure/install-azure-cli
 
-### Step 3: Test the Connection
+### Step 1: Clone, install, and build
 
 ```bash
-# Test your configuration
-mcp-sqlserver --help
-
-# Quick connection test (press Ctrl+C to exit)
-mcp-sqlserver
-```
-
-### Step 4: Add to Claude Desktop
-
-1. **Find your Claude Desktop config file:**
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. **Add the MCP server configuration:**
-```json
-{
-  "mcpServers": {
-    "sqlserver": {
-      "command": "mcp-sqlserver",
-      "env": {
-        "SQLSERVER_HOST": "your-server.database.windows.net",
-        "SQLSERVER_USER": "your-username",
-        "SQLSERVER_PASSWORD": "your-password",
-        "SQLSERVER_DATABASE": "your-database",
-        "SQLSERVER_ENCRYPT": "true",
-        "SQLSERVER_TRUST_CERT": "false"
-      }
-    }
-  }
-}
-```
-
-3. **Restart Claude Desktop**
-
-### Step 5: Start Exploring!
-
-Try these commands in Claude Desktop:
-- `"Test the SQL Server connection"`
-- `"List all databases on the server"`
-- `"Show me the tables in [database name]"`
-- `"Describe the structure of the Users table"`
-- `"Show me foreign key relationships"`
-
-## Features
-
-- **🔒 Read-only operations**: Only SELECT queries allowed, with comprehensive security validation
-- **🗄️ Schema discovery**: Explore databases, tables, views, relationships, and metadata  
-- **📊 Data exploration**: Execute safe queries with built-in limits and timeouts
-- **🔐 Enterprise-ready**: Encrypted connections with certificate trust for production environments
-- **🛡️ Security-first**: Query validation, SQL injection protection, and access controls
-
-## Available Tools
-
-### Schema Discovery
-- `list_databases` - List all databases on the SQL Server instance
-- `list_tables` - List tables in a database or schema
-- `list_views` - List views in a database or schema
-- `describe_table` - Get detailed table schema including columns, data types, and constraints
-
-### Relationship Analysis
-- `get_foreign_keys` - Get foreign key relationships for tables
-- `get_table_stats` - Get table statistics including row counts and size information
-
-### Data Exploration  
-- `execute_query` - Execute read-only SELECT queries with safety validation
-- `get_server_info` - Get SQL Server version, edition, and configuration details
-
-## Common Commands for Claude Desktop
-
-Once your MCP server is configured, try these natural language commands:
-
-### Getting Started Commands
-```
-"Test the SQL Server connection"
-"Show me server information"
-"List all databases on this server"
-"What tables are in the [database name] database?"
-```
-
-### Database Exploration
-```
-"Describe the structure of the Users table"
-"Show me foreign key relationships in this database"
-"What are the largest tables by row count?"
-"Give me a sample of data from the Orders table"
-```
-
-### Advanced Analysis
-```
-"Help me understand the relationship between Orders and Customers"
-"Show me all lookup tables in this database"
-"What columns contain date/time information?"
-"Find tables that might contain user authentication data"
-```
-
-### Custom Queries
-```
-"Run this query: SELECT TOP 10 * FROM Products WHERE Price > 100"
-"Show me all customers created in the last 30 days"
-"What are the different product categories in the database?"
-```
-
-## Installation
-
-```bash
+git clone https://github.com/trainerroad/mcp-sqlserver.git ~/.claude/mcp-sqlserver
+cd ~/.claude/mcp-sqlserver
 npm install
 npm run build
 ```
 
-## Configuration
+### Step 2: Choose your authentication method
 
-The server is configured using environment variables:
+#### Option A: Azure AD (recommended for Azure SQL)
 
-### Required
-- `SQLSERVER_USER` - SQL Server username
-- `SQLSERVER_PASSWORD` - SQL Server password
+1. Install the Azure CLI if you don't have it:
+   ```bash
+   # Windows (winget)
+   winget install Microsoft.AzureCLI
 
-### Optional
-- `SQLSERVER_HOST` - Server hostname (default: localhost)
-- `SQLSERVER_DATABASE` - Default database name
-- `SQLSERVER_PORT` - Port number (default: 1433)
-- `SQLSERVER_ENCRYPT` - Enable encryption (default: true)
-- `SQLSERVER_TRUST_CERT` - Trust server certificate (default: true)
-- `SQLSERVER_CONNECTION_TIMEOUT` - Connection timeout in ms (default: 30000)
-- `SQLSERVER_REQUEST_TIMEOUT` - Request timeout in ms (default: 60000)
-- `SQLSERVER_MAX_ROWS` - Maximum rows per query (default: 1000)
+   # macOS
+   brew install azure-cli
 
-## Usage
+   # Linux
+   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+   ```
 
-### Environment Variables
-```bash
-export SQLSERVER_HOST="your-server.database.windows.net"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
-export SQLSERVER_DATABASE="your-database"
-export SQLSERVER_ENCRYPT="true"
-export SQLSERVER_TRUST_CERT="true"
-```
+2. Sign in with the account that has database access:
+   ```bash
+   az login
+   ```
 
-### Running the Server
-```bash
-npm start
-```
+3. Register the MCP server:
+   ```bash
+   claude mcp add mssql-readonly -s user \
+     -e SQLSERVER_HOST=your-server.database.windows.net \
+     -e SQLSERVER_DATABASE=your-database \
+     -e SQLSERVER_AUTH_MODE=aad-default \
+     -e SQLSERVER_ENCRYPT=true \
+     -e SQLSERVER_TRUST_CERT=false \
+     -- node ~/.claude/mcp-sqlserver/dist/index.js
+   ```
 
-## Installation Options
-
-### Option 1: Global Installation (Recommended)
+#### Option B: SQL Server authentication
 
 ```bash
-npm install -g @bilims/mcp-sqlserver
+claude mcp add mssql-readonly -s user \
+  -e SQLSERVER_HOST=your-server.database.windows.net \
+  -e SQLSERVER_DATABASE=your-database \
+  -e SQLSERVER_USER=your-username \
+  -e SQLSERVER_PASSWORD=your-password \
+  -e SQLSERVER_ENCRYPT=true \
+  -e SQLSERVER_TRUST_CERT=false \
+  -- node ~/.claude/mcp-sqlserver/dist/index.js
 ```
 
-### Option 2: Local Installation
+For on-premises SQL Server with self-signed certificates, set `SQLSERVER_TRUST_CERT=true`.
+
+### Step 3: Verify
 
 ```bash
-npm install @bilims/mcp-sqlserver
-npx mcp-sqlserver
+claude mcp list
 ```
 
-### Option 3: Run with npx (No Installation)
+Should show: `mssql-readonly: ... ✓ Connected`
 
-```bash
-npx @bilims/mcp-sqlserver
-```
+### Step 4: Start a new Claude Code session
 
-## Integration Examples
+The MCP server only loads in **new** sessions. Try:
+- *"Test the SQL Server connection"*
+- *"List all tables in the database"*
+- *"Show me the top 10 rows from the Users table"*
 
-### Claude Desktop
+## Schema Cache
 
-Add to your Claude Desktop configuration (`claude_desktop_config.json`):
+On the first `execute_query` call in a session, the server automatically:
 
-```json
-{
-  "mcpServers": {
-    "sqlserver": {
-      "command": "mcp-sqlserver",
-      "env": {
-        "SQLSERVER_HOST": "your-server.database.windows.net",
-        "SQLSERVER_USER": "your-username",
-        "SQLSERVER_PASSWORD": "your-password",
-        "SQLSERVER_DATABASE": "your-database"
-      }
-    }
-  }
-}
-```
+1. Checks for a cached schema file at `.schema-cache/<database-name>.md` (relative to the install directory)
+2. If none exists, queries the database for all tables, columns, primary keys, and foreign keys
+3. Writes a compact markdown cache file and includes it in the response
 
-### Claude Code CLI
+This means Claude Code gets full schema context on the first query — no extra tool calls needed. Subsequent queries in the same session skip the schema (already in context).
 
-```bash
-# Set environment variables
-export SQLSERVER_HOST="your-server"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
+**To refresh the cache** after schema changes, call the `snapshot_schema` tool.
 
-# Use with Claude Code
-claude mcp add sqlserver mcp-sqlserver
-```
+**To use a custom cache path**, set the `SQLSERVER_SCHEMA_CACHE_PATH` environment variable.
 
-### VSCode with MCP Extension
+## Environment Variables
 
-Install the MCP extension for VSCode and add the server configuration.
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SQLSERVER_HOST` | Yes | `localhost` | Server hostname |
+| `SQLSERVER_DATABASE` | No | `master` | Default database |
+| `SQLSERVER_AUTH_MODE` | No | `sql` | Auth method: `sql`, `aad-default`, `aad-password`, `aad-service-principal` |
+| `SQLSERVER_USER` | For SQL auth | | SQL Server username |
+| `SQLSERVER_PASSWORD` | For SQL auth | | SQL Server password |
+| `SQLSERVER_CLIENT_ID` | No | | Azure AD application (client) ID |
+| `SQLSERVER_CLIENT_SECRET` | For service principal | | Azure AD client secret |
+| `SQLSERVER_TENANT_ID` | No | | Azure AD tenant ID |
+| `SQLSERVER_PORT` | No | `1433` | Server port |
+| `SQLSERVER_ENCRYPT` | No | `true` | Enable TLS encryption |
+| `SQLSERVER_TRUST_CERT` | No | `true` | Trust server certificate (set `false` for Azure SQL) |
+| `SQLSERVER_MAX_ROWS` | No | `1000` | Max rows per query (up to 10,000) |
+| `SQLSERVER_CONNECTION_TIMEOUT` | No | `30000` | Connection timeout in ms |
+| `SQLSERVER_REQUEST_TIMEOUT` | No | `60000` | Query timeout in ms |
+| `SQLSERVER_SCHEMA_CACHE_PATH` | No | Auto-derived | Override schema cache file path |
 
-## Security Features
+## Azure AD Auth Modes
 
-### Query Validation
-- Only SELECT, WITH, SHOW, DESCRIBE, and EXPLAIN statements allowed
-- Comprehensive blacklist of dangerous keywords (INSERT, UPDATE, DELETE, DROP, etc.)
-- SQL injection pattern detection
-- Automatic query sanitization
-
-### Connection Security
-- TLS/SSL encryption enabled by default
-- Server certificate trust options for enterprise environments
-- Connection pooling with timeout controls
-- Configurable request timeouts
-
-### Result Limits
-- Maximum row limits per query (configurable)
-- Automatic TOP clause injection for SELECT queries
-- Query execution time tracking
-- Memory usage protection
-
-## Example Queries
-
-Once connected, you can use the tools through your MCP client:
-
-```typescript
-// List all databases
-await callTool("list_databases", {});
-
-// List tables in a specific schema
-await callTool("list_tables", { schema: "dbo" });
-
-// Get table schema details
-await callTool("describe_table", { 
-  table_name: "Users", 
-  schema: "dbo" 
-});
-
-// Execute a read-only query
-await callTool("execute_query", { 
-  query: "SELECT TOP 10 * FROM Users WHERE active = 1",
-  limit: 10
-});
-
-// Get foreign key relationships
-await callTool("get_foreign_keys", { 
-  table_name: "Orders" 
-});
-```
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Run in development mode
-npm run dev
-
-# Run linting
-npm run lint
-
-# Run tests
-npm test
-```
+| Mode | Use Case | Credential Source |
+|------|----------|-------------------|
+| `aad-default` | Developer machines, Azure VMs | `az login`, managed identity, env vars — tries multiple sources automatically |
+| `aad-password` | Username/password with Azure AD | Requires `SQLSERVER_USER`, `SQLSERVER_PASSWORD`, `SQLSERVER_CLIENT_ID` |
+| `aad-service-principal` | CI/CD, automation | Requires `SQLSERVER_CLIENT_ID`, `SQLSERVER_CLIENT_SECRET`, `SQLSERVER_TENANT_ID` |
 
 ## Troubleshooting
 
-### Connection Issues
-1. Verify server hostname and port
-2. Check if encryption/certificate settings match your SQL Server configuration
-3. Ensure user has appropriate read permissions
-4. Test connection using SQL Server Management Studio first
+### Azure AD: "AADSTS" errors
+- Run `az account show` to verify you're signed in with the correct account
+- Run `az login` to re-authenticate if your token has expired
+- Ensure your Azure AD account has been granted access to the database (`CREATE USER [user@domain.com] FROM EXTERNAL PROVIDER`)
 
-### Permission Issues
-The user account needs at minimum:
-- `CONNECT` permission to the database
-- `SELECT` permission on tables/views you want to query
-- Access to system views for metadata queries
+### Connection refused / timeout
+- Verify the server hostname and port are correct
+- Check firewall rules — Azure SQL requires your IP to be allowed
+- For Azure SQL, ensure `SQLSERVER_ENCRYPT=true` and `SQLSERVER_TRUST_CERT=false`
 
-### Common SQL Server Configurations
+### Permission errors on queries
+- The account needs at minimum `db_datareader` role membership
+- For schema discovery, access to `INFORMATION_SCHEMA` views and `sys.` catalog views is required
 
-#### Azure SQL Database
-```bash
-export SQLSERVER_HOST="your-server.database.windows.net"
-export SQLSERVER_ENCRYPT="true"
-export SQLSERVER_TRUST_CERT="false"
-```
-
-#### On-premises SQL Server with self-signed certificates
-```bash
-export SQLSERVER_HOST="sql-server.company.com"
-export SQLSERVER_ENCRYPT="true" 
-export SQLSERVER_TRUST_CERT="true"
-```
-
-## License
-
-MIT
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## Support
-
-For issues and questions:
-- Check the troubleshooting section above
-- Review SQL Server connection documentation
-- Ensure MCP client compatibility
+### Schema cache not generating
+- Ensure the server process has write access to its install directory (or set `SQLSERVER_SCHEMA_CACHE_PATH` to a writable location)
+- Check stderr output for errors: `claude mcp list` shows server logs on failure
 
 ---
 
-Built with the [Model Context Protocol SDK](https://github.com/modelcontextprotocol/typescript-sdk) for seamless AI integration.
+## Claude Code Automated Setup Instructions
+
+<!-- This section is for Claude Code to follow when a user asks it to set up this MCP server. -->
+
+When a user asks you to set up this MCP server, follow these steps exactly:
+
+### Step 1: Clone the repo
+
+Clone into the user's Claude config directory:
+- **Windows (Git Bash):** `~/.claude/mcp-sqlserver` resolves to `/c/Users/<username>/.claude/mcp-sqlserver`
+- **macOS/Linux:** `~/.claude/mcp-sqlserver`
+
+```bash
+git clone https://github.com/trainerroad/mcp-sqlserver.git ~/.claude/mcp-sqlserver
+```
+
+If the directory already exists, run `git -C ~/.claude/mcp-sqlserver pull` instead.
+
+### Step 2: Install dependencies and build
+
+```bash
+cd ~/.claude/mcp-sqlserver && npm install && npm run build
+```
+
+### Step 3: Determine auth method
+
+Ask the user how they authenticate to their SQL Server:
+- **Azure AD** — They need `az login` with the correct account. Verify with `az account show`.
+- **SQL auth** — They need a username and password.
+
+### Step 4: Register the MCP server
+
+Use the **absolute path** to the built entry point:
+- **Windows:** `C:/Users/<username>/.claude/mcp-sqlserver/dist/index.js`
+- **macOS:** `/Users/<username>/.claude/mcp-sqlserver/dist/index.js`
+- **Linux:** `/home/<username>/.claude/mcp-sqlserver/dist/index.js`
+
+For Azure AD:
+```bash
+claude mcp add mssql-readonly -s user \
+  -e SQLSERVER_HOST=<server> \
+  -e SQLSERVER_DATABASE=<database> \
+  -e SQLSERVER_AUTH_MODE=aad-default \
+  -e SQLSERVER_ENCRYPT=true \
+  -e SQLSERVER_TRUST_CERT=false \
+  -- node <ABSOLUTE_PATH>/dist/index.js
+```
+
+For SQL auth:
+```bash
+claude mcp add mssql-readonly -s user \
+  -e SQLSERVER_HOST=<server> \
+  -e SQLSERVER_DATABASE=<database> \
+  -e SQLSERVER_USER=<username> \
+  -e SQLSERVER_PASSWORD=<password> \
+  -e SQLSERVER_ENCRYPT=true \
+  -e SQLSERVER_TRUST_CERT=false \
+  -- node <ABSOLUTE_PATH>/dist/index.js
+```
+
+### Step 5: Verify
+
+Run `claude mcp list` and confirm the mssql-readonly server shows as connected.
+
+Tell the user: **Setup complete! Start a new Claude Code session and try "Test the SQL Server connection" or "List all tables in the database".**
+
+Note: The MCP server will only be available in **new** Claude Code sessions, not the current one.

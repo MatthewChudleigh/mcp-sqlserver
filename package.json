@@ -49,6 +49,7 @@
     "url": "https://github.com/bilims/mcp-sqlserver/issues"
   },
   "dependencies": {
+    "@azure/identity": "^4.4.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
     "mssql": "^11.0.1",
     "zod": "^3.23.8"

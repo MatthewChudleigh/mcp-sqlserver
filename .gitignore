@@ -146,6 +146,9 @@ local/
 dev/
 scratch/
 
+# Schema cache (auto-generated, may contain sensitive table/column names)
+.schema-cache/
+
 # SQL Server specific temp files
 *.mdf
 *.ldf

@@ -66,9 +66,15 @@ function showVersion() {
 }
 
 function validateEnvironment(): boolean {
-  const required = ['SQLSERVER_HOST', 'SQLSERVER_USER', 'SQLSERVER_PASSWORD'];
+  const authMode = process.env.SQLSERVER_AUTH_MODE || 'sql';
+  const required = ['SQLSERVER_HOST'];
+
+  if (authMode === 'sql') {
+    required.push('SQLSERVER_USER', 'SQLSERVER_PASSWORD');
+  }
+
   const missing = required.filter(env => !process.env[env]);
-  
+
   if (missing.length > 0) {
     console.error('❌ Missing required environment variables:');
     missing.forEach(env => {
@@ -82,8 +88,12 @@ function validateEnvironment(): boolean {
   try {
     const config = {
       server: process.env.SQLSERVER_HOST!,
-      user: process.env.SQLSERVER_USER!,
-      password: process.env.SQLSERVER_PASSWORD!,
+      authMode: authMode as 'sql' | 'aad-default' | 'aad-password' | 'aad-service-principal',
+      user: process.env.SQLSERVER_USER,
+      password: process.env.SQLSERVER_PASSWORD,
+      clientId: process.env.SQLSERVER_CLIENT_ID,
+      clientSecret: process.env.SQLSERVER_CLIENT_SECRET,
+      tenantId: process.env.SQLSERVER_TENANT_ID,
       database: process.env.SQLSERVER_DATABASE,
       port: parseInt(process.env.SQLSERVER_PORT || '1433'),
       encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',

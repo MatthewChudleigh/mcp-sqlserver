@@ -24,8 +24,10 @@ async function runServer() {
       GetServerInfoTool,
       GetTableStatsTool,
       TestConnectionTool,
+      SnapshotSchemaTool,
     } = await import('./tools/index.js');
     const { ErrorHandler } = await import('./errors.js');
+    const { SchemaCache } = await import('./schema-cache.js');
 
     class SqlServerMCPServer {
       private server: typeof Server.prototype;
@@ -121,7 +123,7 @@ async function runServer() {
         });
       }
 
-      private initializeTools(maxRows: number) {
+      private initializeTools(maxRows: number, schemaCache: InstanceType<typeof SchemaCache>) {
         const toolClasses = [
           TestConnectionTool,
           ListDatabasesTool,
@@ -132,10 +134,15 @@ async function runServer() {
           GetForeignKeysTool,
           GetServerInfoTool,
           GetTableStatsTool,
+          SnapshotSchemaTool,
         ];
 
         for (const ToolClass of toolClasses) {
           const tool = new ToolClass(this.connection, maxRows);
+          // Inject schema cache into tools that need it
+          if ('setSchemaCache' in tool) {
+            (tool as any).setSchemaCache(schemaCache);
+          }
           this.tools.set(tool.getName(), tool);
         }
       }
@@ -147,9 +154,21 @@ async function runServer() {
           // Don't connect immediately in MCP mode - defer connection until first tool use
           // This prevents the server from failing startup if SQL Server is temporarily unavailable
           console.error(`MCP SQL Server initialized for ${config.server}:${config.port || 1433}`);
-          console.error(`Database: ${config.database || 'default'}, User: ${config.user}`);
-          
-          this.initializeTools(config.maxRows || 1000);
+          console.error(`Database: ${config.database || 'default'}, Auth: ${config.authMode || 'sql'}${config.authMode === 'sql' ? `, User: ${config.user}` : ''}`);
+          console.error(`ApplicationIntent: ReadOnly`);
+
+          // Initialize schema cache
+          // Uses SQLSERVER_SCHEMA_CACHE_PATH if set, otherwise derives from database name
+          const dbNameForCache = (config.database || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+          const { fileURLToPath } = await import('url');
+          const { dirname: pathDirname, join: pathJoin } = await import('path');
+          const serverDir = pathDirname(fileURLToPath(import.meta.url));
+          const defaultCachePath = pathJoin(serverDir, '..', '.schema-cache', `${dbNameForCache}.md`);
+          const schemaCachePath = process.env.SQLSERVER_SCHEMA_CACHE_PATH || defaultCachePath;
+          const schemaCache = new SchemaCache(schemaCachePath);
+          console.error(`Schema cache: ${schemaCachePath}`);
+
+          this.initializeTools(config.maxRows || 1000, schemaCache);
         } catch (error) {
           console.error(`Initialization failed:`, error);
           throw error;
@@ -170,11 +189,16 @@ async function runServer() {
       }
 
       // Read configuration from environment variables
+      const authMode = (process.env.SQLSERVER_AUTH_MODE || 'sql') as 'sql' | 'aad-default' | 'aad-password' | 'aad-service-principal';
       const config = {
         server: process.env.SQLSERVER_HOST || 'localhost',
         database: process.env.SQLSERVER_DATABASE,
-        user: process.env.SQLSERVER_USER || '',
-        password: process.env.SQLSERVER_PASSWORD || '',
+        authMode,
+        user: process.env.SQLSERVER_USER,
+        password: process.env.SQLSERVER_PASSWORD,
+        clientId: process.env.SQLSERVER_CLIENT_ID,
+        clientSecret: process.env.SQLSERVER_CLIENT_SECRET,
+        tenantId: process.env.SQLSERVER_TENANT_ID,
         port: parseInt(process.env.SQLSERVER_PORT || '1433'),
         encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',
         trustServerCertificate: process.env.SQLSERVER_TRUST_CERT !== 'false',
@@ -191,8 +215,8 @@ async function runServer() {
         process.exit(1);
       }
 
-      if (!config.user || !config.password) {
-        console.error('Error: SQLSERVER_USER and SQLSERVER_PASSWORD environment variables are required');
+      if (authMode === 'sql' && (!config.user || !config.password)) {
+        console.error('Error: SQLSERVER_USER and SQLSERVER_PASSWORD environment variables are required for SQL auth mode');
         process.exit(1);
       }
 
