@@ -66,6 +66,10 @@ export class DomainMapper {
     let tableName = entityName;
     let schema = 'dbo';
 
+    // Track the first Map-context ToTable as a fallback for TPH discriminator configs
+    let mapBlockTableName: string | undefined;
+    let mapBlockSchema: string | undefined;
+
     const toTablePattern = /ToTable\s*\(\s*"([^"]+)"(?:\s*,\s*"([^"]+)")?\s*\)/g;
     let toTableMatch: RegExpExecArray | null;
     while ((toTableMatch = toTablePattern.exec(content)) !== null) {
@@ -73,7 +77,13 @@ export class DomainMapper {
       // Map-context calls look like: m.ToTable (single-letter lambda variable dot prefix).
       const precedingChunk = content.slice(Math.max(0, toTableMatch.index - 20), toTableMatch.index);
       if (/[a-zA-Z_]\s*\.\s*$/.test(precedingChunk)) {
-        // This is inside a Map block (e.g., m.ToTable) — skip it
+        // This is inside a Map block (e.g., m.ToTable) — remember as fallback for TPH
+        if (mapBlockTableName === undefined) {
+          mapBlockTableName = toTableMatch[1];
+          if (toTableMatch[2]) {
+            mapBlockSchema = toTableMatch[2];
+          }
+        }
         continue;
       }
       // First non-Map ToTable is the primary table
@@ -103,6 +113,14 @@ export class DomainMapper {
         column: discriminatorMatch[1],
         value: discriminatorMatch[3],
       };
+      // For TPH discriminator configs, the ToTable is inside a Map block.
+      // Use the Map-block ToTable as the primary table if no standalone ToTable was found.
+      if (tableName === entityName && mapBlockTableName !== undefined) {
+        tableName = mapBlockTableName;
+        if (mapBlockSchema !== undefined) {
+          schema = mapBlockSchema;
+        }
+      }
     }
 
     // 5. Column renames from Property(x => x.Prop).HasColumnName("Col")
