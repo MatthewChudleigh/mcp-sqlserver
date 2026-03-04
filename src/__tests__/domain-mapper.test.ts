@@ -115,9 +115,10 @@ describe('DomainMapper.generateDomainContext', () => {
     const result = DomainMapper.generateDomainContext(domainRoot);
     expect(result).not.toBeNull();
 
-    // Header
+    // Header and usage guidance
     expect(result).toContain('# Domain Entity Mappings');
     expect(result).toMatch(/4 entities parsed/);
+    expect(result).toContain('Use these mappings to translate domain/business terms');
 
     // Entity -> Table Index entries (4 parseable configs, NotParseable.cs skipped)
     expect(result).toContain('Activity -> dbo.Activity');

@@ -259,6 +259,12 @@ export class DomainMapper {
       `> ${entities.length} entities parsed from EF configurations. ${skipped} files skipped. Generated ${today}`
     );
     lines.push('');
+    lines.push(
+      'Use these mappings to translate domain/business terms to SQL table and column names. ' +
+      'When a user refers to a domain concept (e.g. "cycling activities"), find the matching entity below ' +
+      'and use its mapped table name, column renames, and relationships to construct accurate queries.'
+    );
+    lines.push('');
 
     // Entity -> Table Index
     lines.push('## Entity -> Table Index');
