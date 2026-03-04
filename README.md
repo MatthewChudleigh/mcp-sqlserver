@@ -120,6 +120,17 @@ This means Claude Code gets full schema context on the first query — no extra 
 
 **To use a custom cache path**, set the `SQLSERVER_SCHEMA_CACHE_PATH` environment variable.
 
+### Domain Entity Mappings (Optional)
+
+If you work with a C# project that uses Entity Framework, set `SQLSERVER_DOMAIN_SOURCE_PATH` to the project root containing `EntityFramework/Domain/Configurations/` files. The schema cache will be enriched with:
+
+- Entity-to-table name mappings (e.g., `WorkoutRecord` -> `CyclingActivity` table)
+- Property-to-column renames
+- Relationship navigation paths for JOIN construction
+- TPH discriminator columns
+
+This helps Claude translate domain concepts to accurate SQL queries.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -139,6 +150,7 @@ This means Claude Code gets full schema context on the first query — no extra 
 | `SQLSERVER_CONNECTION_TIMEOUT` | No | `30000` | Connection timeout in ms |
 | `SQLSERVER_REQUEST_TIMEOUT` | No | `60000` | Query timeout in ms |
 | `SQLSERVER_SCHEMA_CACHE_PATH` | No | Auto-derived | Override schema cache file path |
+| `SQLSERVER_DOMAIN_SOURCE_PATH` | No | | Path to C# project root with EF configurations |
 
 ## Azure AD Auth Modes
 
