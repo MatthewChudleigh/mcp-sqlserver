@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import sql from 'mssql';
+import { DomainMapper } from './domain-mapper.js';
 
 interface SchemaColumn {
   table_schema: string;
@@ -36,10 +37,12 @@ export interface SchemaSnapshotResult {
 
 export class SchemaCache {
   readonly cachePath: string;
+  readonly domainSourcePath: string | undefined;
   private servedThisSession = false;
 
-  constructor(cachePath: string) {
+  constructor(cachePath: string, domainSourcePath?: string) {
     this.cachePath = cachePath;
+    this.domainSourcePath = domainSourcePath;
   }
 
   /**
@@ -167,7 +170,19 @@ export class SchemaCache {
       lines.push('');
     }
 
-    const markdown = lines.join('\r\n');
+    let markdown = lines.join('\r\n');
+
+    // Append domain entity mappings if configured
+    if (this.domainSourcePath) {
+      try {
+        const domainContext = DomainMapper.generateDomainContext(this.domainSourcePath);
+        if (domainContext) {
+          markdown += '\r\n' + domainContext;
+        }
+      } catch (error) {
+        console.error('Warning: Failed to generate domain context:', error);
+      }
+    }
 
     // Write cache file
     mkdirSync(dirname(this.cachePath), { recursive: true });

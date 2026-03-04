@@ -73,8 +73,11 @@ npm run build
      -e SQLSERVER_AUTH_MODE=aad-default \
      -e SQLSERVER_ENCRYPT=true \
      -e SQLSERVER_TRUST_CERT=false \
+     -e SQLSERVER_DOMAIN_SOURCE_PATH=/path/to/your-csharp-project \
      -- node ~/.claude/mcp-sqlserver/dist/index.js
    ```
+
+   > **`SQLSERVER_DOMAIN_SOURCE_PATH`** is optional. Set it to the root of a C# project that contains `EntityFramework/Domain/Configurations/` to enrich the schema cache with entity-to-table mappings, column renames, and relationship metadata. Omit it if you don't use EF configurations.
 
 #### Option B: SQL Server authentication
 
@@ -86,6 +89,7 @@ claude mcp add mssql-readonly -s user \
   -e SQLSERVER_PASSWORD=your-password \
   -e SQLSERVER_ENCRYPT=true \
   -e SQLSERVER_TRUST_CERT=false \
+  -e SQLSERVER_DOMAIN_SOURCE_PATH=/path/to/your-csharp-project \
   -- node ~/.claude/mcp-sqlserver/dist/index.js
 ```
 
@@ -120,6 +124,17 @@ This means Claude Code gets full schema context on the first query — no extra 
 
 **To use a custom cache path**, set the `SQLSERVER_SCHEMA_CACHE_PATH` environment variable.
 
+### Domain Entity Mappings (Optional)
+
+If you work with a C# project that uses Entity Framework, set `SQLSERVER_DOMAIN_SOURCE_PATH` to the project root containing `EntityFramework/Domain/Configurations/` files. The schema cache will be enriched with:
+
+- Entity-to-table name mappings (e.g., `WorkoutRecord` -> `CyclingActivity` table)
+- Property-to-column renames
+- Relationship navigation paths for JOIN construction
+- TPH discriminator columns
+
+This helps Claude translate domain concepts to accurate SQL queries.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -139,6 +154,7 @@ This means Claude Code gets full schema context on the first query — no extra 
 | `SQLSERVER_CONNECTION_TIMEOUT` | No | `30000` | Connection timeout in ms |
 | `SQLSERVER_REQUEST_TIMEOUT` | No | `60000` | Query timeout in ms |
 | `SQLSERVER_SCHEMA_CACHE_PATH` | No | Auto-derived | Override schema cache file path |
+| `SQLSERVER_DOMAIN_SOURCE_PATH` | No | | Path to C# project root with EF configurations |
 
 ## Azure AD Auth Modes
 
@@ -228,6 +244,8 @@ Use the **absolute path** to the built entry point:
 - **macOS:** `/Users/<username>/.claude/mcp-sqlserver/dist/index.js`
 - **Linux:** `/home/<username>/.claude/mcp-sqlserver/dist/index.js`
 
+If the user has a C# project with EF configurations, ask for the path and include `-e SQLSERVER_DOMAIN_SOURCE_PATH=<path>`. This is optional.
+
 For Azure AD:
 ```bash
 claude mcp add mssql-readonly -s user \
@@ -236,6 +254,7 @@ claude mcp add mssql-readonly -s user \
   -e SQLSERVER_AUTH_MODE=aad-default \
   -e SQLSERVER_ENCRYPT=true \
   -e SQLSERVER_TRUST_CERT=false \
+  -e SQLSERVER_DOMAIN_SOURCE_PATH=<path-to-csharp-project> \
   -- node <ABSOLUTE_PATH>/dist/index.js
 ```
 
@@ -248,6 +267,7 @@ claude mcp add mssql-readonly -s user \
   -e SQLSERVER_PASSWORD=<password> \
   -e SQLSERVER_ENCRYPT=true \
   -e SQLSERVER_TRUST_CERT=false \
+  -e SQLSERVER_DOMAIN_SOURCE_PATH=<path-to-csharp-project> \
   -- node <ABSOLUTE_PATH>/dist/index.js
 ```
 
