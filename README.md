@@ -73,8 +73,11 @@ npm run build
      -e SQLSERVER_AUTH_MODE=aad-default \
      -e SQLSERVER_ENCRYPT=true \
      -e SQLSERVER_TRUST_CERT=false \
+     -e SQLSERVER_DOMAIN_SOURCE_PATH=/path/to/your-csharp-project \
      -- node ~/.claude/mcp-sqlserver/dist/index.js
    ```
+
+   > **`SQLSERVER_DOMAIN_SOURCE_PATH`** is optional. Set it to the root of a C# project that contains `EntityFramework/Domain/Configurations/` to enrich the schema cache with entity-to-table mappings, column renames, and relationship metadata. Omit it if you don't use EF configurations.
 
 #### Option B: SQL Server authentication
 
@@ -86,6 +89,7 @@ claude mcp add mssql-readonly -s user \
   -e SQLSERVER_PASSWORD=your-password \
   -e SQLSERVER_ENCRYPT=true \
   -e SQLSERVER_TRUST_CERT=false \
+  -e SQLSERVER_DOMAIN_SOURCE_PATH=/path/to/your-csharp-project \
   -- node ~/.claude/mcp-sqlserver/dist/index.js
 ```
 
@@ -240,6 +244,8 @@ Use the **absolute path** to the built entry point:
 - **macOS:** `/Users/<username>/.claude/mcp-sqlserver/dist/index.js`
 - **Linux:** `/home/<username>/.claude/mcp-sqlserver/dist/index.js`
 
+If the user has a C# project with EF configurations, ask for the path and include `-e SQLSERVER_DOMAIN_SOURCE_PATH=<path>`. This is optional.
+
 For Azure AD:
 ```bash
 claude mcp add mssql-readonly -s user \
@@ -248,6 +254,7 @@ claude mcp add mssql-readonly -s user \
   -e SQLSERVER_AUTH_MODE=aad-default \
   -e SQLSERVER_ENCRYPT=true \
   -e SQLSERVER_TRUST_CERT=false \
+  -e SQLSERVER_DOMAIN_SOURCE_PATH=<path-to-csharp-project> \
   -- node <ABSOLUTE_PATH>/dist/index.js
 ```
 
@@ -260,6 +267,7 @@ claude mcp add mssql-readonly -s user \
   -e SQLSERVER_PASSWORD=<password> \
   -e SQLSERVER_ENCRYPT=true \
   -e SQLSERVER_TRUST_CERT=false \
+  -e SQLSERVER_DOMAIN_SOURCE_PATH=<path-to-csharp-project> \
   -- node <ABSOLUTE_PATH>/dist/index.js
 ```
 
