@@ -57,40 +57,37 @@ export class DomainMapper {
     }
     const entityName = classMatch[1];
 
-    // 2. Extract table name from ToTable("...")
-    // Direct ToTable (NOT inside a Map block, i.e. not m.ToTable)
+    // 2. Extract table name from ToTable("...", "schema?")
+    // Two-pass approach:
+    //   Pass 1 — find the first ToTable that appears at a statement boundary (after
+    //   newline + whitespace or chained off builder), i.e. NOT inside a .Map(m => ...) block.
+    //   We detect Map-context ToTable by looking for a single-letter variable dot prefix (m.ToTable).
+    //   Pass 2 — fall back to entity name if nothing found.
     let tableName = entityName;
-    const schema = 'dbo';
+    let schema = 'dbo';
 
-    // Find all ToTable calls; distinguish direct vs inside Map block
-    // Direct: ToTable("TableName") — not preceded by a lambda variable dot
-    const directToTableMatch = content.match(
-      /(?<![a-zA-Z0-9_]\s*\.\s*)ToTable\s*\(\s*"([^"]+)"\s*\)/gs
-    );
-
-    // Map block m.ToTable (junction table context or fallback)
-    const mapToTableMatch = content.match(
-      /[a-zA-Z_]\s*\.\s*ToTable\s*\(\s*"([^"]+)"\s*\)/gs
-    );
-
-    if (directToTableMatch && directToTableMatch.length > 0) {
-      // Extract the table name from the first direct ToTable
-      const nameMatch = directToTableMatch[0].match(/ToTable\s*\(\s*"([^"]+)"\s*\)/);
-      if (nameMatch) {
-        tableName = nameMatch[1];
+    const toTablePattern = /ToTable\s*\(\s*"([^"]+)"(?:\s*,\s*"([^"]+)")?\s*\)/g;
+    let toTableMatch: RegExpExecArray | null;
+    while ((toTableMatch = toTablePattern.exec(content)) !== null) {
+      // Check if this ToTable is inside a Map block by looking at the preceding characters.
+      // Map-context calls look like: m.ToTable (single-letter lambda variable dot prefix).
+      const precedingChunk = content.slice(Math.max(0, toTableMatch.index - 20), toTableMatch.index);
+      if (/[a-zA-Z_]\s*\.\s*$/.test(precedingChunk)) {
+        // This is inside a Map block (e.g., m.ToTable) — skip it
+        continue;
       }
-    } else if (mapToTableMatch && mapToTableMatch.length > 0) {
-      // Fallback to Map block ToTable if no direct one
-      const nameMatch = mapToTableMatch[0].match(/ToTable\s*\(\s*"([^"]+)"\s*\)/);
-      if (nameMatch) {
-        tableName = nameMatch[1];
+      // First non-Map ToTable is the primary table
+      tableName = toTableMatch[1];
+      if (toTableMatch[2]) {
+        schema = toTableMatch[2];
       }
+      break;
     }
 
     // 3. Primary key from HasKey(x => x.Prop)
     let primaryKey = 'Id';
     const hasKeyMatch = content.match(
-      /HasKey\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)/s
+      /HasKey\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)/
     );
     if (hasKeyMatch) {
       primaryKey = hasKeyMatch[1];
@@ -99,7 +96,7 @@ export class DomainMapper {
     // 4. TPH discriminator from Requires("Col").HasValue(val)
     let discriminator: { column: string; value: string } | undefined;
     const discriminatorMatch = content.match(
-      /Requires\s*\(\s*"([^"]+)"\s*\)\s*\.\s*HasValue\s*\(\s*("?)([^)"]+)\2\s*\)/s
+      /Requires\s*\(\s*"([^"]+)"\s*\)\s*\.\s*HasValue\s*\(\s*("?)([^)"]+)\2\s*\)/
     );
     if (discriminatorMatch) {
       discriminator = {
@@ -110,7 +107,7 @@ export class DomainMapper {
 
     // 5. Column renames from Property(x => x.Prop).HasColumnName("Col")
     const columnRenames: DomainColumnRename[] = [];
-    const columnRenameRegex = /Property\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[\s\S]*?\.HasColumnName\s*\(\s*"([^"]+)"\s*\)/gs;
+    const columnRenameRegex = /Property\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[^;]*?\.HasColumnName\s*\(\s*"([^"]+)"\s*\)/gs;
     let colMatch: RegExpExecArray | null;
     while ((colMatch = columnRenameRegex.exec(content)) !== null) {
       const property = colMatch[1];
@@ -123,8 +120,12 @@ export class DomainMapper {
     // 6-9. Relationships
     const relationships: DomainRelationship[] = [];
 
+    // Note: targetEntity uses the navigation property name as an approximation of the target
+    // entity type, since the actual generic type parameter is not available from the fluent
+    // API call pattern alone (e.g., HasRequired<Foo>(x => x.Bar) — we capture "Bar", not "Foo").
+
     // 6. Required relationships: HasRequired(x => x.Nav).WithMany(...).HasForeignKey(x => x.FK)
-    const requiredRegex = /HasRequired\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[\s\S]*?\.WithMany\s*\([^)]*\)[\s\S]*?\.HasForeignKey\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)/gs;
+    const requiredRegex = /HasRequired\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[^;]*?\.WithMany\s*\([^)]*\)[^;]*?\.HasForeignKey\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)/gs;
     let reqMatch: RegExpExecArray | null;
     while ((reqMatch = requiredRegex.exec(content)) !== null) {
       relationships.push({
@@ -136,7 +137,7 @@ export class DomainMapper {
     }
 
     // 7. Optional relationships: HasOptional(x => x.Nav).WithMany(...).HasForeignKey(x => x.FK)
-    const optionalRegex = /HasOptional\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[\s\S]*?\.WithMany\s*\([^)]*\)[\s\S]*?\.HasForeignKey\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)/gs;
+    const optionalRegex = /HasOptional\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[^;]*?\.WithMany\s*\([^)]*\)[^;]*?\.HasForeignKey\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)/gs;
     let optMatch: RegExpExecArray | null;
     while ((optMatch = optionalRegex.exec(content)) !== null) {
       relationships.push({
@@ -148,7 +149,7 @@ export class DomainMapper {
     }
 
     // 8. One-to-one: HasRequired(x => x.Nav).WithRequiredPrincipal(...)
-    const oneToOneRegex = /HasRequired\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[\s\S]*?\.WithRequiredPrincipal\s*\([^)]*\)/gs;
+    const oneToOneRegex = /HasRequired\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[^;]*?\.WithRequiredPrincipal\s*\([^)]*\)/gs;
     let otoMatch: RegExpExecArray | null;
     while ((otoMatch = oneToOneRegex.exec(content)) !== null) {
       relationships.push({
@@ -160,7 +161,7 @@ export class DomainMapper {
     }
 
     // 9. Many-to-many: HasMany(x => x.Nav).WithMany(...).Map(m => m.ToTable("JT").MapLeftKey("LK").MapRightKey("RK"))
-    const manyToManyRegex = /HasMany\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[\s\S]*?\.WithMany\s*\([^)]*\)[\s\S]*?\.Map\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*ToTable\s*\(\s*"([^"]+)"\s*\)[\s\S]*?\.MapLeftKey\s*\(\s*"([^"]+)"\s*\)[\s\S]*?\.MapRightKey\s*\(\s*"([^"]+)"\s*\)\s*\)/gs;
+    const manyToManyRegex = /HasMany\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*(\w+)\s*\)[^;]*?\.WithMany\s*\([^)]*\)[^;]*?\.Map\s*\(\s*\w+\s*=>\s*\w+\s*\.\s*ToTable\s*\(\s*"([^"]+)"\s*\)[^;]*?\.MapLeftKey\s*\(\s*"([^"]+)"\s*\)[^;]*?\.MapRightKey\s*\(\s*"([^"]+)"\s*\)\s*\)/gs;
     let m2mMatch: RegExpExecArray | null;
     while ((m2mMatch = manyToManyRegex.exec(content)) !== null) {
       relationships.push({
