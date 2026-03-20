@@ -1,5 +1,6 @@
 import { BaseTool } from './base.js';
 import { ViewInfo } from '../types.js';
+import { ParameterValidator } from '../validation.js';
 
 export class ListViewsTool extends BaseTool {
   getName(): string {
@@ -24,10 +25,11 @@ export class ListViewsTool extends BaseTool {
   }
 
   async execute(params: { schema?: string }): Promise<ViewInfo[]> {
-    const { schema } = params;
+    const validatedParams = ParameterValidator.validateListTablesParameters(params);
+    const { schema } = validatedParams;
 
     let query = `
-      SELECT 
+      SELECT
         TABLE_CATALOG as table_catalog,
         TABLE_SCHEMA as table_schema,
         TABLE_NAME as table_name,
@@ -38,7 +40,8 @@ export class ListViewsTool extends BaseTool {
     `;
 
     if (schema) {
-      query += ` WHERE TABLE_SCHEMA = '${schema.replace(/'/g, "''")}'`;
+      const escapedSchema = ParameterValidator.escapeIdentifier(schema);
+      query += ` WHERE TABLE_SCHEMA = ${escapedSchema}`;
     }
 
     query += ' ORDER BY TABLE_SCHEMA, TABLE_NAME';

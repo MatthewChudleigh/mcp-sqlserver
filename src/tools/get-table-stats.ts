@@ -1,5 +1,6 @@
 import { BaseTool } from './base.js';
 import { TableStats } from '../types.js';
+import { ParameterValidator } from '../validation.js';
 
 export class GetTableStatsTool extends BaseTool {
   getName(): string {
@@ -29,10 +30,11 @@ export class GetTableStatsTool extends BaseTool {
   }
 
   async execute(params: { table_name?: string; schema?: string }): Promise<TableStats[]> {
-    const { table_name, schema = 'dbo' } = params;
+    const validatedParams = ParameterValidator.validateForeignKeyParameters(params);
+    const { table_name, schema = 'dbo' } = validatedParams;
 
     let query = `
-      SELECT 
+      SELECT
         s.name as table_schema,
         t.name as table_name,
         p.rows as row_count,
@@ -50,13 +52,13 @@ export class GetTableStatsTool extends BaseTool {
     `;
 
     const conditions = [];
-    
+
     if (table_name) {
-      conditions.push(`t.name = '${table_name.replace(/'/g, "''")}'`);
+      conditions.push(`t.name = '${table_name}'`);
     }
-    
+
     if (schema && table_name) {
-      conditions.push(`s.name = '${schema.replace(/'/g, "''")}'`);
+      conditions.push(`s.name = '${schema}'`);
     }
 
     if (conditions.length > 0) {
