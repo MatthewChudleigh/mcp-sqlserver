@@ -11,7 +11,7 @@ export const ConnectionConfigSchema = z.object({
   tenantId: z.string().optional(),
   port: z.number().optional().default(1433),
   encrypt: z.boolean().optional().default(true),
-  trustServerCertificate: z.boolean().optional().default(true),
+  trustServerCertificate: z.boolean().optional().default(false),
   connectionTimeout: z.number().optional().default(30000),
   requestTimeout: z.number().optional().default(60000),
   maxRows: z.number().optional().default(1000),
