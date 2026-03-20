@@ -16,7 +16,7 @@ ENVIRONMENT VARIABLES:
   SQLSERVER_DATABASE  Database name (optional, default: master)
   SQLSERVER_PORT      Port number (optional, default: 1433)
   SQLSERVER_ENCRYPT   Enable encryption (optional, default: true)
-  SQLSERVER_TRUST_CERT Trust server certificate (optional, default: true)
+  SQLSERVER_TRUST_CERT Trust server certificate (optional, default: false)
 
 EXAMPLES:
   # Set environment variables and run
@@ -97,7 +97,7 @@ function validateEnvironment(): boolean {
       database: process.env.SQLSERVER_DATABASE,
       port: parseInt(process.env.SQLSERVER_PORT || '1433'),
       encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',
-      trustServerCertificate: process.env.SQLSERVER_TRUST_CERT !== 'false',
+      trustServerCertificate: process.env.SQLSERVER_TRUST_CERT === 'true',
     };
 
     ConnectionConfigSchema.parse(config);

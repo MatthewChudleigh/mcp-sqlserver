@@ -154,7 +154,7 @@ async function runServer() {
           // Don't connect immediately in MCP mode - defer connection until first tool use
           // This prevents the server from failing startup if SQL Server is temporarily unavailable
           console.error(`MCP SQL Server initialized for ${config.server}:${config.port || 1433}`);
-          console.error(`Database: ${config.database || 'default'}, Auth: ${config.authMode || 'sql'}${config.authMode === 'sql' ? `, User: ${config.user}` : ''}`);
+          console.error(`Database: ${config.database || 'default'}, Auth: ${config.authMode || 'sql'}`);
           console.error(`ApplicationIntent: ReadOnly`);
 
           // Initialize schema cache
@@ -205,7 +205,7 @@ async function runServer() {
         tenantId: process.env.SQLSERVER_TENANT_ID,
         port: parseInt(process.env.SQLSERVER_PORT || '1433'),
         encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',
-        trustServerCertificate: process.env.SQLSERVER_TRUST_CERT !== 'false',
+        trustServerCertificate: process.env.SQLSERVER_TRUST_CERT === 'true',
         connectionTimeout: parseInt(process.env.SQLSERVER_CONNECTION_TIMEOUT || '30000'),
         requestTimeout: parseInt(process.env.SQLSERVER_REQUEST_TIMEOUT || '60000'),
         maxRows: parseInt(process.env.SQLSERVER_MAX_ROWS || '1000'),
