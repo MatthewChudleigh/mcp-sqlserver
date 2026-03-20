@@ -26,6 +26,10 @@ export class QueryValidator {
     'GRANT',
     'REVOKE',
     'DENY',
+    'WAITFOR',   // time-based blind injection
+    'DECLARE',   // variable declaration used in multi-step attacks
+    'RECONFIGURE',
+    'SHUTDOWN',
   ];
 
   private static stripComments(query: string): string {
@@ -84,10 +88,28 @@ export class QueryValidator {
 
   private static containsSqlInjectionPatterns(query: string): boolean {
     const patterns = [
-      /;/,                          // Any semicolon — blocks multi-statement injection
-      /\bUNION\b[\s\S]*\bSELECT\b/, // UNION-based injection (dotall via [\s\S])
-      /'\s*OR\s*'/,                 // OR injection
-      /'\s*AND\s*'/,                // AND injection
+      // Multi-statement injection
+      /;/,
+
+      // UNION-based injection
+      /\bUNION\b[\s\S]*\bSELECT\b/,
+
+      // Boolean OR/AND injection — covers both quoted and numeric forms:
+      //   ' OR '   ' OR 1   OR 1=1   OR 'a'='a'
+      /'\s*OR\b/,
+      /'\s*AND\b/,
+      /\bOR\s+\d/,                  // OR 1=1, OR 0=0, OR 1--
+      /\bAND\s+\d/,                 // AND 1=1
+
+      // System variable access (@@version, @@servername, etc.)
+      /@@/,
+
+      // Character encoding used to bypass keyword filters
+      /\bCHAR\s*\(/,
+      /\bNCHAR\s*\(/,
+
+      // Hex literals used for encoding payloads (0x41424344...)
+      /0x[0-9a-f]{4,}/i,
     ];
 
     return patterns.some(pattern => pattern.test(query));
@@ -101,10 +123,8 @@ export class QueryValidator {
   }
 
   static addRowLimit(query: string, maxRows: number): string {
-    const normalizedQuery = query.trim().toUpperCase();
-    
-    // If query already has TOP clause, don't modify
-    if (normalizedQuery.includes('TOP ')) {
+    // If query already has a TOP clause (TOP n or TOP(n)), don't modify
+    if (/\bTOP\s*[\d(]/i.test(query)) {
       return query;
     }
 
