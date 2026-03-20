@@ -1,4 +1,5 @@
-import { BaseTool } from './base.js';
+import { sql } from '../connection.js';
+import { BaseTool, QueryParam } from './base.js';
 import { TableStats } from '../types.js';
 import { ParameterValidator } from '../validation.js';
 
@@ -51,14 +52,17 @@ export class GetTableStatsTool extends BaseTool {
         AND i.object_id > 255
     `;
 
-    const conditions = [];
+    const conditions: string[] = [];
+    const inputs: QueryParam[] = [];
 
     if (table_name) {
-      conditions.push(`t.name = '${table_name}'`);
+      conditions.push(`t.name = @table_name`);
+      inputs.push({ name: 'table_name', type: sql.NVarChar(128), value: table_name });
     }
 
     if (schema && table_name) {
-      conditions.push(`s.name = '${schema}'`);
+      conditions.push(`s.name = @schema`);
+      inputs.push({ name: 'schema', type: sql.NVarChar(128), value: schema });
     }
 
     if (conditions.length > 0) {
@@ -70,6 +74,6 @@ export class GetTableStatsTool extends BaseTool {
       ORDER BY table_schema, table_name
     `;
 
-    return await this.executeSafeQuery<TableStats>(query);
+    return await this.executeSafeQueryWithParams<TableStats>(query, inputs);
   }
 }

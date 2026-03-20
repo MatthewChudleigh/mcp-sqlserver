@@ -1,4 +1,5 @@
-import { BaseTool } from './base.js';
+import { sql } from '../connection.js';
+import { BaseTool, QueryParam } from './base.js';
 import { ForeignKeyInfo } from '../types.js';
 import { ParameterValidator } from '../validation.js';
 
@@ -47,14 +48,17 @@ export class GetForeignKeysTool extends BaseTool {
         ON fk.object_id = fkc.constraint_object_id
     `;
 
-    const conditions = [];
+    const conditions: string[] = [];
+    const inputs: QueryParam[] = [];
 
     if (table_name) {
-      conditions.push(`OBJECT_NAME(fk.parent_object_id) = '${table_name}'`);
+      conditions.push(`OBJECT_NAME(fk.parent_object_id) = @table_name`);
+      inputs.push({ name: 'table_name', type: sql.NVarChar(128), value: table_name });
     }
 
     if (schema && table_name) {
-      conditions.push(`OBJECT_SCHEMA_NAME(fk.parent_object_id) = '${schema}'`);
+      conditions.push(`OBJECT_SCHEMA_NAME(fk.parent_object_id) = @schema`);
+      inputs.push({ name: 'schema', type: sql.NVarChar(128), value: schema });
     }
 
     if (conditions.length > 0) {
@@ -63,6 +67,6 @@ export class GetForeignKeysTool extends BaseTool {
 
     query += ' ORDER BY table_schema, table_name, constraint_name';
 
-    return await this.executeSafeQuery<ForeignKeyInfo>(query);
+    return await this.executeSafeQueryWithParams<ForeignKeyInfo>(query, inputs);
   }
 }

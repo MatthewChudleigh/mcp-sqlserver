@@ -1,6 +1,9 @@
 import sql from 'mssql';
 import { ConnectionConfig } from './types.js';
 
+export { sql };
+export type QueryParam = { name: string; type: sql.ISqlType | sql.ISqlTypeFactoryWithNoParams; value: unknown };
+
 export class SqlServerConnection {
   private pool: sql.ConnectionPool | null = null;
   private config: ConnectionConfig;
@@ -97,6 +100,21 @@ export class SqlServerConnection {
     }
 
     const request = this.pool.request();
+    return await request.query(queryText);
+  }
+
+  async queryWithParams<T = any>(
+    queryText: string,
+    inputs: Array<{ name: string; type: sql.ISqlType | sql.ISqlTypeFactoryWithNoParams; value: unknown }>,
+  ): Promise<sql.IResult<T>> {
+    if (!this.pool) {
+      throw new Error('Database connection not established');
+    }
+
+    const request = this.pool.request();
+    for (const input of inputs) {
+      request.input(input.name, input.type, input.value);
+    }
     return await request.query(queryText);
   }
 

@@ -1,6 +1,8 @@
-import { SqlServerConnection } from '../connection.js';
+import { SqlServerConnection, QueryParam } from '../connection.js';
 import { QueryValidator } from '../security.js';
 import { ErrorHandler } from '../errors.js';
+
+export type { QueryParam };
 
 export abstract class BaseTool {
   protected connection: SqlServerConnection;
@@ -28,6 +30,17 @@ export abstract class BaseTool {
     try {
       await this.connection.connect();
       return await this.executeQuery<T>(query);
+    } catch (error) {
+      const mcpError = ErrorHandler.handleSqlServerError(error);
+      throw mcpError;
+    }
+  }
+
+  protected async executeSafeQueryWithParams<T = any>(query: string, inputs: QueryParam[]): Promise<T[]> {
+    try {
+      await this.connection.connect();
+      const result = await this.connection.queryWithParams<T>(query, inputs);
+      return result.recordset;
     } catch (error) {
       const mcpError = ErrorHandler.handleSqlServerError(error);
       throw mcpError;
