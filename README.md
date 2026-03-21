@@ -66,6 +66,11 @@ npm run build
    ```
 
 3. Register the MCP server:
+
+   ```bash
+   claude mcp add mssql-readonly --scope project -- node .claude/mcp-sqlserver/dist/index.js
+   ```
+
    ```bash
    claude mcp add mssql-readonly -s user \
      -e SQLSERVER_HOST=your-server.database.windows.net \
