@@ -67,6 +67,24 @@ export class SchemaCache {
   }
 
   /**
+   * Ensures the schema is cached to disk. Returns the cache file path on first
+   * call (so the caller can tell the LLM where to find it), or null on
+   * subsequent calls. Does NOT return the schema content inline.
+   */
+  async ensureCached(queryFn: <T>(sql: string) => Promise<sql.IResult<T>>, dbName: string): Promise<string | null> {
+    if (this.servedThisSession) {
+      return null;
+    }
+    this.servedThisSession = true;
+
+    if (!existsSync(this.cachePath)) {
+      await this.generateSchema(queryFn, dbName);
+    }
+
+    return this.cachePath;
+  }
+
+  /**
    * Force-regenerate the schema cache file.
    */
   async generateSchema(queryFn: <T>(sql: string) => Promise<sql.IResult<T>>, dbName: string): Promise<SchemaSnapshotResult> {

@@ -38,7 +38,7 @@ export class ExecuteQueryTool extends BaseTool {
     };
   }
 
-  async execute(params: { query: string; limit?: number }): Promise<QueryResult & { schema?: string }> {
+  async execute(params: { query: string; limit?: number }): Promise<QueryResult & { schemaCachedAt?: string }> {
     const validatedParams = ParameterValidator.validateQueryParameters(params);
     const { query, limit } = validatedParams;
     const maxRows = limit;
@@ -48,13 +48,16 @@ export class ExecuteQueryTool extends BaseTool {
     try {
       await this.connection.connect();
 
-      // On first call, load/generate schema and include it
-      let schema: string | null = null;
+      // On first call, ensure schema is cached to disk (but don't return it inline)
+      let schemaCachedAt: string | undefined;
       if (this.schemaCache) {
         try {
           const dbName = this.connection.getConfig().database ?? 'unknown';
           const queryFn = this.connection.query.bind(this.connection);
-          schema = await this.schemaCache.getSchemaOnce(queryFn, dbName);
+          const schemaResult = await this.schemaCache.ensureCached(queryFn, dbName);
+          if (schemaResult) {
+            schemaCachedAt = schemaResult;
+          }
         } catch (schemaError) {
           // Don't fail the query if schema loading fails
           console.error('Warning: Failed to load schema cache:', schemaError);
@@ -77,15 +80,15 @@ export class ExecuteQueryTool extends BaseTool {
       // Convert to rows array
       const rows = result.map(row => columns.map(col => row[col]));
 
-      const response: QueryResult & { schema?: string } = {
+      const response: QueryResult & { schemaCachedAt?: string } = {
         columns,
         rows,
         rowCount: result.length,
         executionTime,
       };
 
-      if (schema) {
-        response.schema = schema;
+      if (schemaCachedAt) {
+        response.schemaCachedAt = schemaCachedAt;
       }
 
       return response;
