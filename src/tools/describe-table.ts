@@ -1,4 +1,5 @@
-import { BaseTool } from './base.js';
+import { sql } from '../connection.js';
+import { BaseTool, QueryParam } from './base.js';
 import { ColumnInfo } from '../types.js';
 import { ParameterValidator } from '../validation.js';
 
@@ -33,11 +34,8 @@ export class DescribeTableTool extends BaseTool {
     const validatedParams = ParameterValidator.validateTableDescriptionParameters(params);
     const { table_name, schema } = validatedParams;
 
-    const escapedTableName = ParameterValidator.escapeIdentifier(table_name);
-    const escapedSchema = ParameterValidator.escapeIdentifier(schema);
-
     const query = `
-      SELECT 
+      SELECT
         TABLE_CATALOG as table_catalog,
         TABLE_SCHEMA as table_schema,
         TABLE_NAME as table_name,
@@ -53,11 +51,16 @@ export class DescribeTableTool extends BaseTool {
         NUMERIC_SCALE as numeric_scale,
         DATETIME_PRECISION as datetime_precision
       FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = ${escapedTableName}
-        AND TABLE_SCHEMA = ${escapedSchema}
+      WHERE TABLE_NAME = @table_name
+        AND TABLE_SCHEMA = @schema
       ORDER BY ORDINAL_POSITION
     `;
 
-    return await this.executeSafeQuery<ColumnInfo>(query);
+    const inputs: QueryParam[] = [
+      { name: 'table_name', type: sql.NVarChar(128), value: table_name },
+      { name: 'schema', type: sql.NVarChar(128), value: schema },
+    ];
+
+    return await this.executeSafeQueryWithParams<ColumnInfo>(query, inputs);
   }
 }

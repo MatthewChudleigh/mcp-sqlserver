@@ -123,12 +123,24 @@ export class QueryValidator {
   }
 
   static addRowLimit(query: string, maxRows: number): string {
-    // If query already has a TOP clause (TOP n or TOP(n)), don't modify
-    if (/\bTOP\s*[\d(]/i.test(query)) {
-      return query;
+    // Match existing TOP clause with a numeric literal: TOP n or TOP(n)
+    const topPattern = /\bTOP(\s*\(?\s*)(\d+)(\s*\)?)/i;
+    const topMatch = topPattern.exec(query);
+
+    if (topMatch) {
+      const requestedRows = parseInt(topMatch[2], 10);
+      if (requestedRows <= maxRows) {
+        return query; // Already within limit
+      }
+      // Cap to maxRows, preserving any surrounding parentheses/whitespace
+      return (
+        query.slice(0, topMatch.index) +
+        'TOP' + topMatch[1] + maxRows + topMatch[3] +
+        query.slice(topMatch.index + topMatch[0].length)
+      );
     }
 
-    // Add TOP clause after SELECT
+    // No numeric TOP clause — inject one after SELECT
     return query.replace(
       /^(\s*SELECT\s+)/i,
       `$1TOP ${maxRows} `

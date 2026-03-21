@@ -1,4 +1,5 @@
-import { BaseTool } from './base.js';
+import { sql } from '../connection.js';
+import { BaseTool, QueryParam } from './base.js';
 import { TableInfo } from '../types.js';
 import { ParameterValidator } from '../validation.js';
 
@@ -28,8 +29,10 @@ export class ListTablesTool extends BaseTool {
     const validatedParams = ParameterValidator.validateListTablesParameters(params);
     const { schema } = validatedParams;
 
+    const inputs: QueryParam[] = [];
+
     let query = `
-      SELECT 
+      SELECT
         TABLE_CATALOG as table_catalog,
         TABLE_SCHEMA as table_schema,
         TABLE_NAME as table_name,
@@ -39,12 +42,12 @@ export class ListTablesTool extends BaseTool {
     `;
 
     if (schema) {
-      const escapedSchema = ParameterValidator.escapeIdentifier(schema);
-      query += ` AND TABLE_SCHEMA = ${escapedSchema}`;
+      query += ` AND TABLE_SCHEMA = @schema`;
+      inputs.push({ name: 'schema', type: sql.NVarChar(128), value: schema });
     }
 
     query += ' ORDER BY TABLE_SCHEMA, TABLE_NAME';
 
-    return await this.executeSafeQuery<TableInfo>(query);
+    return await this.executeSafeQueryWithParams<TableInfo>(query, inputs);
   }
 }
