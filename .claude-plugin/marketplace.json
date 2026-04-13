@@ -12,7 +12,7 @@
         "repo": "MatthewChudleigh/mcp-sqlserver"
       },
       "description": "Read-only SQL Server MCP server with slash commands for querying and schema discovery.",
-      "version": "2.0.6",
+      "version": "2.0.7",
       "category": "database",
       "keywords": ["sql-server", "mssql", "database"]
     }
