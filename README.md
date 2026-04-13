@@ -6,18 +6,18 @@ Based on [bilims/mcp-sqlserver](https://github.com/bilims/mcp-sqlserver) with ad
 
 ## Tools
 
-| Tool | Purpose |
-|------|---------|
-| `execute_query` | Run read-only SELECT queries. Automatically includes the full database schema on first call. |
-| `list_tables` | List all tables in a database or schema |
-| `list_views` | List all views in a database or schema |
-| `describe_table` | Get column details for a specific table |
-| `get_foreign_keys` | Get foreign key relationships |
-| `get_table_stats` | Get row counts and table sizes |
-| `list_databases` | List all databases on the server |
-| `get_server_info` | Get SQL Server version and edition |
-| `test_connection` | Verify the connection works |
-| `snapshot_schema` | Force-regenerate the schema cache file |
+| Tool               | Purpose                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `execute_query`    | Run read-only SELECT queries. Automatically includes the full database schema on first call. |
+| `list_tables`      | List all tables in a database or schema                                                      |
+| `list_views`       | List all views in a database or schema                                                       |
+| `describe_table`   | Get column details for a specific table                                                      |
+| `get_foreign_keys` | Get foreign key relationships                                                                |
+| `get_table_stats`  | Get row counts and table sizes                                                               |
+| `list_databases`   | List all databases on the server                                                             |
+| `get_server_info`  | Get SQL Server version and edition                                                           |
+| `test_connection`  | Verify the connection works                                                                  |
+| `snapshot_schema`  | Force-regenerate the schema cache file                                                       |
 
 ## Read-Only Safety
 
@@ -142,32 +142,32 @@ This helps Claude translate domain concepts to accurate SQL queries.
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SQLSERVER_HOST` | Yes | `localhost` | Server hostname |
-| `SQLSERVER_DATABASE` | No | `master` | Default database |
-| `SQLSERVER_AUTH_MODE` | No | `sql` | Auth method: `sql`, `aad-default`, `aad-password`, `aad-service-principal` |
-| `SQLSERVER_USER` | For SQL auth | | SQL Server username |
-| `SQLSERVER_PASSWORD` | For SQL auth | | SQL Server password |
-| `SQLSERVER_CLIENT_ID` | No | | Azure AD application (client) ID |
-| `SQLSERVER_CLIENT_SECRET` | For service principal | | Azure AD client secret |
-| `SQLSERVER_TENANT_ID` | No | | Azure AD tenant ID |
-| `SQLSERVER_PORT` | No | `1433` | Server port |
-| `SQLSERVER_ENCRYPT` | No | `true` | Enable TLS encryption |
-| `SQLSERVER_TRUST_CERT` | No | `true` | Trust server certificate (set `false` for Azure SQL) |
-| `SQLSERVER_MAX_ROWS` | No | `1000` | Max rows per query (up to 10,000) |
-| `SQLSERVER_CONNECTION_TIMEOUT` | No | `30000` | Connection timeout in ms |
-| `SQLSERVER_REQUEST_TIMEOUT` | No | `60000` | Query timeout in ms |
-| `SQLSERVER_SCHEMA_CACHE_PATH` | No | Auto-derived | Override schema cache file path |
-| `SQLSERVER_DOMAIN_SOURCE_PATH` | No | | Path to C# project root with EF configurations |
+| Variable                       | Required              | Default      | Description                                          |
+| ------------------------------ | --------------------- | ------------ | ---------------------------------------------------- |
+| `SQLSERVER_HOST`               | Yes                   | `localhost`  | Server hostname                                      |
+| `SQLSERVER_DATABASE`           | No                    | `master`     | Default database                                     |
+| `SQLSERVER_AUTH_MODE`          | No                    | `sql`        | Azure AD Auth Mode                                   |
+| `SQLSERVER_USER`               | For SQL auth          |              | SQL Server username                                  |
+| `SQLSERVER_PASSWORD`           | For SQL auth          |              | SQL Server password                                  |
+| `SQLSERVER_CLIENT_ID`          | No                    |              | Azure AD application (client) ID                     |
+| `SQLSERVER_CLIENT_SECRET`      | For service principal |              | Azure AD client secret                               |
+| `SQLSERVER_TENANT_ID`          | No                    |              | Azure AD tenant ID                                   |
+| `SQLSERVER_PORT`               | No                    | `1433`       | Server port                                          |
+| `SQLSERVER_ENCRYPT`            | No                    | `true`       | Enable TLS encryption                                |
+| `SQLSERVER_TRUST_CERT`         | No                    | `true`       | Trust server certificate (set `false` for Azure SQL) |
+| `SQLSERVER_MAX_ROWS`           | No                    | `1000`       | Max rows per query (up to 10,000)                    |
+| `SQLSERVER_CONNECTION_TIMEOUT` | No                    | `30000`      | Connection timeout in ms                             |
+| `SQLSERVER_REQUEST_TIMEOUT`    | No                    | `60000`      | Query timeout in ms                                  |
+| `SQLSERVER_SCHEMA_CACHE_PATH`  | No                    | Auto-derived | Override schema cache file path                      |
+| `SQLSERVER_DOMAIN_SOURCE_PATH` | No                    |              | Path to C# project root with EF configurations       |
 
 ## Azure AD Auth Modes
 
-| Mode | Use Case | Credential Source |
-|------|----------|-------------------|
-| `aad-default` | Developer machines, Azure VMs | `az login`, managed identity, env vars — tries multiple sources automatically |
-| `aad-password` | Username/password with Azure AD | Requires `SQLSERVER_USER`, `SQLSERVER_PASSWORD`, `SQLSERVER_CLIENT_ID` |
-| `aad-service-principal` | CI/CD, automation | Requires `SQLSERVER_CLIENT_ID`, `SQLSERVER_CLIENT_SECRET`, `SQLSERVER_TENANT_ID` |
+| Mode                    | Use Case                        | Credential Source                                                                |
+| ----------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
+| `aad-default`           | Developer machines, Azure VMs   | `az login`, managed identity, env vars — tries multiple sources automatically    |
+| `aad-password`          | Username/password with Azure AD | Requires `SQLSERVER_USER`, `SQLSERVER_PASSWORD`, `SQLSERVER_CLIENT_ID`           |
+| `aad-service-principal` | CI/CD, automation               | Requires `SQLSERVER_CLIENT_ID`, `SQLSERVER_CLIENT_SECRET`, `SQLSERVER_TENANT_ID` |
 
 ## Troubleshooting
 

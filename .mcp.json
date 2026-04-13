@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "sqlserver": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@ibergeni/mcp-sqlserver"],
       "env": {
         "SQLSERVER_AUTH_MODE": "${SQLSERVER_AUTH_MODE}",
         "SQLSERVER_HOST": "${SQLSERVER_HOST}",

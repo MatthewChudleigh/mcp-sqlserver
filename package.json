@@ -1,6 +1,6 @@
 {
-  "name": "@matthewchudleigh/mcp-sqlserver",
-  "version": "2.0.3",
+  "name": "@ibergeni/mcp-sqlserver",
+  "version": "2.0.4",
   "description": "A read-only Model Context Protocol (MCP) server for Microsoft SQL Server that enables AI agents to safely explore and query SQL Server databases",
   "type": "module",
   "main": "dist/index.js",
@@ -68,8 +68,8 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.4.6",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   },
