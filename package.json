@@ -49,7 +49,7 @@
   "homepage": "https://github.com/MatthewChudleigh/mcp-sqlserver",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MatthewChudleigh/mcp-sqlserver.git"
+    "url": "git+https://github.com/MatthewChudleigh/mcp-sqlserver.git"
   },
   "bugs": {
     "url": "https://github.com/MatthewChudleigh/mcp-sqlserver/issues"
