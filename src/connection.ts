@@ -26,7 +26,7 @@ export class SqlServerConnection {
         trustServerCertificate: this.config.trustServerCertificate,
         connectTimeout: this.config.connectionTimeout,
         requestTimeout: this.config.requestTimeout,
-        readOnlyIntent: true,
+        readOnlyIntent: process.env.SQLSERVER_READONLY_INTENT === 'true',
       },
       pool: {
         max: 10,

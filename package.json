@@ -1,6 +1,6 @@
 {
   "name": "@ibergeni/mcp-sqlserver",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "A read-only Model Context Protocol (MCP) server for Microsoft SQL Server that enables AI agents to safely explore and query SQL Server databases",
   "type": "module",
   "main": "dist/index.js",
