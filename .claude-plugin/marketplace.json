@@ -1,0 +1,20 @@
+{
+  "name": "mcp-sqlserver",
+  "owner": {
+    "name": "Matthew Chudleigh",
+    "url": "https://github.com/MatthewChudleigh"
+  },
+  "plugins": [
+    {
+      "name": "mcp-sqlserver",
+      "source": {
+        "source": "github",
+        "repo": "MatthewChudleigh/mcp-sqlserver"
+      },
+      "description": "Read-only SQL Server MCP server with slash commands for querying and schema discovery.",
+      "version": "2.0.3",
+      "category": "database",
+      "keywords": ["sql-server", "mssql", "database"]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "mcp-sqlserver",
+  "version": "2.0.3",
+  "description": "Read-only MCP server for Microsoft SQL Server — safely explore schemas and query databases.",
+  "author": {
+    "name": "Bilims",
+    "url": "https://github.com/bilims/mcp-sqlserver"
+  },
+  "contributors": [
+    {
+      "name": "Matthew Chudleigh",
+      "url": "https://github.com/MatthewChudleigh"
+    }
+  ],
+  "homepage": "https://github.com/MatthewChudleigh/mcp-sqlserver",
+  "license": "MIT",
+  "keywords": ["sql-server", "mssql", "database", "readonly"]
+}

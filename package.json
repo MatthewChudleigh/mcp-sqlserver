@@ -1,5 +1,5 @@
 {
-  "name": "@bilims/mcp-sqlserver",
+  "name": "@matthewchudleigh/mcp-sqlserver",
   "version": "2.0.3",
   "description": "A read-only Model Context Protocol (MCP) server for Microsoft SQL Server that enables AI agents to safely explore and query SQL Server databases",
   "type": "module",
@@ -39,14 +39,20 @@
     "data-exploration"
   ],
   "author": "Bilims",
+  "contributors": [
+    {
+      "name": "Matthew Chudleigh",
+      "url": "https://github.com/MatthewChudleigh"
+    }
+  ],
   "license": "MIT",
-  "homepage": "https://github.com/bilims/mcp-sqlserver",
+  "homepage": "https://github.com/MatthewChudleigh/mcp-sqlserver",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bilims/mcp-sqlserver.git"
+    "url": "https://github.com/MatthewChudleigh/mcp-sqlserver.git"
   },
   "bugs": {
-    "url": "https://github.com/bilims/mcp-sqlserver/issues"
+    "url": "https://github.com/MatthewChudleigh/mcp-sqlserver/issues"
   },
   "dependencies": {
     "@azure/identity": "^4.4.0",
