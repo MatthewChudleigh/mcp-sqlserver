@@ -1,5 +1,12 @@
 import sql from 'mssql';
+import type { SecureVersion } from 'tls';
 import { ConnectionConfig } from './types.js';
+
+const VALID_TLS_VERSIONS: ReadonlyArray<SecureVersion> = ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'];
+
+function parseTlsMinVersion(value: string | undefined, fallback: SecureVersion): SecureVersion {
+  return VALID_TLS_VERSIONS.includes(value as SecureVersion) ? (value as SecureVersion) : fallback;
+}
 
 export { sql };
 export type QueryParam = { name: string; type: sql.ISqlType | sql.ISqlTypeFactoryWithNoParams; value: unknown };
@@ -27,6 +34,10 @@ export class SqlServerConnection {
         connectTimeout: this.config.connectionTimeout,
         requestTimeout: this.config.requestTimeout,
         readOnlyIntent: process.env.SQLSERVER_READONLY_INTENT === 'true',
+        cryptoCredentialsDetails: {
+          minVersion: parseTlsMinVersion(process.env.SQLSERVER_TLS_MIN_VERSION, 'TLSv1.2'),
+          ciphers: process.env.SQLSERVER_TLS_CIPHERS ?? 'DEFAULT@SECLEVEL=0',
+        },
       },
       pool: {
         max: 10,
