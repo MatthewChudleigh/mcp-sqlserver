@@ -166,7 +166,7 @@ async function runServer() {
         this.server = new Server(
           {
             name: 'mcp-sqlserver',
-            version: '2.0.8',
+            version: '2.0.9',
           },
           {
             capabilities: {
