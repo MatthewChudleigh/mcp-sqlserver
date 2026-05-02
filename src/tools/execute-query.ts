@@ -2,15 +2,8 @@ import { BaseTool } from './base.js';
 import { QueryResult } from '../types.js';
 import { ParameterValidator } from '../validation.js';
 import { ErrorHandler } from '../errors.js';
-import { SchemaCache } from '../schema-cache.js';
 
 export class ExecuteQueryTool extends BaseTool {
-  private schemaCache: SchemaCache | null = null;
-
-  setSchemaCache(cache: SchemaCache): void {
-    this.schemaCache = cache;
-  }
-
   getName(): string {
     return 'execute_query';
   }
@@ -33,51 +26,47 @@ export class ExecuteQueryTool extends BaseTool {
           minimum: 1,
           maximum: 10000,
         },
+        connection: this.getConnectionProperty(),
       },
       required: ['query'],
     };
   }
 
-  async execute(params: { query: string; limit?: number }): Promise<QueryResult & { schemaCachedAt?: string }> {
+  async execute(params: { query: string; limit?: number; connection?: string }): Promise<QueryResult & { schemaCachedAt?: string }> {
     const validatedParams = ParameterValidator.validateQueryParameters(params);
     const { query, limit } = validatedParams;
     const maxRows = limit;
 
     const startTime = Date.now();
 
-    try {
-      await this.connection.connect();
+    const entry = this.resolveEntry(params.connection);
+    const connection = entry.connection;
+    const schemaCache = entry.schemaCache;
 
-      // On first call, ensure schema is cached to disk (but don't return it inline)
+    try {
+      await connection.connect();
+
       let schemaCachedAt: string | undefined;
-      if (this.schemaCache) {
-        try {
-          const dbName = this.connection.getConfig().database ?? 'unknown';
-          const queryFn = this.connection.query.bind(this.connection);
-          const schemaResult = await this.schemaCache.ensureCached(queryFn, dbName);
-          if (schemaResult) {
-            schemaCachedAt = schemaResult;
-          }
-        } catch (schemaError) {
-          // Don't fail the query if schema loading fails
-          console.error('Warning: Failed to load schema cache:', schemaError);
+      try {
+        const dbName = connection.getConfig().database ?? 'unknown';
+        const queryFn = connection.query.bind(connection);
+        const schemaResult = await schemaCache.ensureCached(queryFn, dbName);
+        if (schemaResult) {
+          schemaCachedAt = schemaResult;
         }
+      } catch (schemaError) {
+        console.error('Warning: Failed to load schema cache:', schemaError);
       }
 
-      // Override the maxRows for this specific query
       const originalMaxRows = this.maxRows;
       this.maxRows = maxRows;
 
-      const result = await this.executeQuery(query);
+      const result = await this.runQuery(connection, query);
       const executionTime = Date.now() - startTime;
 
-      // Restore original maxRows
       this.maxRows = originalMaxRows;
 
-      // Extract column names
       const columns = result.length > 0 ? Object.keys(result[0]) : [];
-
-      // Convert to rows array
       const rows = result.map(row => columns.map(col => row[col]));
 
       const response: QueryResult & { schemaCachedAt?: string } = {

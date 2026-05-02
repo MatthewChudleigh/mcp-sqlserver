@@ -1,14 +1,7 @@
 import { BaseTool } from './base.js';
 import { ErrorHandler } from '../errors.js';
-import { SchemaCache } from '../schema-cache.js';
 
 export class SnapshotSchemaTool extends BaseTool {
-  private schemaCache: SchemaCache | null = null;
-
-  setSchemaCache(cache: SchemaCache): void {
-    this.schemaCache = cache;
-  }
-
   getName(): string {
     return 'snapshot_schema';
   }
@@ -20,31 +13,32 @@ export class SnapshotSchemaTool extends BaseTool {
   getInputSchema(): any {
     return {
       type: 'object',
-      properties: {},
+      properties: {
+        connection: this.getConnectionProperty(),
+      },
       required: [],
     };
   }
 
-  async execute(_params: Record<string, never>): Promise<{ path: string; tables: number; columns: number }> {
-    if (!this.schemaCache) {
-      throw new Error('Schema cache not configured. Set SQLSERVER_SCHEMA_CACHE_PATH environment variable.');
-    }
+  async execute(params: { connection?: string } = {}): Promise<{ path: string; tables: number; columns: number }> {
+    const entry = this.resolveEntry(params.connection);
+    const connection = entry.connection;
+    const schemaCache = entry.schemaCache;
 
     try {
-      await this.connection.connect();
+      await connection.connect();
 
-      const dbName = this.connection.getConfig().database ?? 'unknown';
-      const queryFn = this.connection.query.bind(this.connection);
-      const result = await this.schemaCache.generateSchema(queryFn, dbName);
+      const dbName = connection.getConfig().database ?? 'unknown';
+      const queryFn = connection.query.bind(connection);
+      const result = await schemaCache.generateSchema(queryFn, dbName);
 
       return {
-        path: this.schemaCache.cachePath,
+        path: schemaCache.cachePath,
         tables: result.tables,
         columns: result.columns,
       };
     } catch (error) {
-      const mcpError = ErrorHandler.handleSqlServerError(error);
-      throw mcpError;
+      throw ErrorHandler.handleSqlServerError(error);
     }
   }
 }

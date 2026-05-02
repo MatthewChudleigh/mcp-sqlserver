@@ -19,6 +19,33 @@ export const ConnectionConfigSchema = z.object({
 
 export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>;
 
+// Schema for entries in SQLSERVER_CONNECTIONS JSON. Accepts either `server`
+// or `host` for the hostname so the keys mirror SQLSERVER_HOST naming.
+export const NamedConnectionInputSchema = z.object({
+  server: z.string().optional(),
+  host: z.string().optional(),
+  database: z.string().optional(),
+  authMode: z.enum(['sql', 'aad-default', 'aad-password', 'aad-service-principal']).optional(),
+  user: z.string().optional(),
+  password: z.string().optional(),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  tenantId: z.string().optional(),
+  port: z.number().optional(),
+  encrypt: z.boolean().optional(),
+  trustServerCertificate: z.boolean().optional(),
+  connectionTimeout: z.number().optional(),
+  requestTimeout: z.number().optional(),
+  maxRows: z.number().optional(),
+}).refine(v => Boolean(v.server || v.host), {
+  message: 'Each connection must specify either "server" or "host"',
+});
+
+export type NamedConnectionInput = z.infer<typeof NamedConnectionInputSchema>;
+
+export const NamedConnectionsMapSchema = z.record(z.string(), NamedConnectionInputSchema);
+export type NamedConnectionsMap = z.infer<typeof NamedConnectionsMapSchema>;
+
 export interface TableInfo {
   table_catalog: string;
   table_schema: string;

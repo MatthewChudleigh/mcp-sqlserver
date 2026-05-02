@@ -13,14 +13,16 @@ export class GetServerInfoTool extends BaseTool {
   getInputSchema(): any {
     return {
       type: 'object',
-      properties: {},
+      properties: {
+        connection: this.getConnectionProperty(),
+      },
       required: [],
     };
   }
 
-  async execute(): Promise<ServerInfo> {
+  async execute(params: { connection?: string } = {}): Promise<ServerInfo> {
     const query = `
-      SELECT 
+      SELECT
         @@SERVERNAME as server_name,
         @@VERSION as product_version,
         SERVERPROPERTY('ProductLevel') as product_level,
@@ -28,7 +30,7 @@ export class GetServerInfoTool extends BaseTool {
         SERVERPROPERTY('EngineEdition') as engine_edition
     `;
 
-    const result = await this.executeSafeQuery<ServerInfo>(query);
+    const result = await this.executeSafeQuery<ServerInfo>(params.connection, query);
     return result[0];
   }
 }

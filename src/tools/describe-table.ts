@@ -25,12 +25,13 @@ export class DescribeTableTool extends BaseTool {
           description: 'Schema name (optional, defaults to dbo)',
           default: 'dbo',
         },
+        connection: this.getConnectionProperty(),
       },
       required: ['table_name'],
     };
   }
 
-  async execute(params: { table_name: string; schema?: string }): Promise<ColumnInfo[]> {
+  async execute(params: { table_name: string; schema?: string; connection?: string }): Promise<ColumnInfo[]> {
     const validatedParams = ParameterValidator.validateTableDescriptionParameters(params);
     const { table_name, schema } = validatedParams;
 
@@ -61,6 +62,6 @@ export class DescribeTableTool extends BaseTool {
       { name: 'schema', type: sql.NVarChar(128), value: schema },
     ];
 
-    return await this.executeSafeQueryWithParams<ColumnInfo>(query, inputs);
+    return await this.executeSafeQueryWithParams<ColumnInfo>(params.connection, query, inputs);
   }
 }

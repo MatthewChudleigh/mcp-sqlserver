@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 
 import { config as dotenvConfig } from 'dotenv';
-import { resolve, dirname } from 'path';
+import { resolve, dirname, join as pathJoin } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenvConfig({ path: resolve(__dirname, '..', '.env') });
 
-// MCP SQL Server - Production version
-
 async function runServer() {
   try {
-    // Dynamic imports to support execution from any working directory
     const { handleCliArgs } = await import('./cli.js');
     const { Server } = await import('@modelcontextprotocol/sdk/server/index.js');
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
@@ -20,7 +17,10 @@ async function runServer() {
       ListToolsRequestSchema,
     } = await import('@modelcontextprotocol/sdk/types.js');
     const { SqlServerConnection } = await import('./connection.js');
-    const { ConnectionConfigSchema } = await import('./types.js');
+    const {
+      ConnectionConfigSchema,
+      NamedConnectionsMapSchema,
+    } = await import('./types.js');
     const {
       ListDatabasesTool,
       ListTablesTool,
@@ -32,20 +32,141 @@ async function runServer() {
       GetTableStatsTool,
       TestConnectionTool,
       SnapshotSchemaTool,
+      ListConnectionsTool,
     } = await import('./tools/index.js');
     const { ErrorHandler } = await import('./errors.js');
     const { SchemaCache } = await import('./schema-cache.js');
+    const { ConnectionRegistry } = await import('./connection-registry.js');
+
+    type ConnConfig = import('./types.js').ConnectionConfig;
+    type NamedInput = import('./types.js').NamedConnectionInput;
+
+    const serverDir = dirname(fileURLToPath(import.meta.url));
+    const cacheBaseDir = pathJoin(serverDir, '..', '.schema-cache');
+
+    function buildSchemaCachePath(connectionName: string, dbName: string | undefined, override?: string): string {
+      if (override) return override;
+      const safeConn = connectionName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeDb = (dbName || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = connectionName === 'default' ? `${safeDb}.md` : `${safeConn}__${safeDb}.md`;
+      return pathJoin(cacheBaseDir, filename);
+    }
+
+    function buildDefaultConfigFromEnv(): ConnConfig | null {
+      if (!process.env.SQLSERVER_HOST) return null;
+      const authMode = (process.env.SQLSERVER_AUTH_MODE || 'sql') as ConnConfig['authMode'];
+      const config = {
+        server: process.env.SQLSERVER_HOST,
+        database: process.env.SQLSERVER_DATABASE,
+        authMode,
+        user: process.env.SQLSERVER_USER,
+        password: process.env.SQLSERVER_PASSWORD,
+        clientId: process.env.SQLSERVER_CLIENT_ID,
+        clientSecret: process.env.SQLSERVER_CLIENT_SECRET,
+        tenantId: process.env.SQLSERVER_TENANT_ID,
+        port: parseInt(process.env.SQLSERVER_PORT || '1433'),
+        encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',
+        trustServerCertificate: process.env.SQLSERVER_TRUST_CERT === 'true',
+        connectionTimeout: parseInt(process.env.SQLSERVER_CONNECTION_TIMEOUT || '30000'),
+        requestTimeout: parseInt(process.env.SQLSERVER_REQUEST_TIMEOUT || '60000'),
+        maxRows: parseInt(process.env.SQLSERVER_MAX_ROWS || '1000'),
+      };
+      return ConnectionConfigSchema.parse(config);
+    }
+
+    function configFromNamedInput(name: string, input: NamedInput): ConnConfig {
+      const server = input.server ?? input.host;
+      if (!server) {
+        throw new Error(`Connection "${name}" must specify "server" or "host"`);
+      }
+      const merged = {
+        server,
+        database: input.database,
+        authMode: input.authMode ?? 'sql',
+        user: input.user,
+        password: input.password,
+        clientId: input.clientId,
+        clientSecret: input.clientSecret,
+        tenantId: input.tenantId,
+        port: input.port ?? 1433,
+        encrypt: input.encrypt ?? true,
+        trustServerCertificate: input.trustServerCertificate ?? false,
+        connectionTimeout: input.connectionTimeout ?? 30000,
+        requestTimeout: input.requestTimeout ?? 60000,
+        maxRows: input.maxRows ?? 1000,
+      };
+      return ConnectionConfigSchema.parse(merged);
+    }
+
+    function buildRegistry(): { registry: InstanceType<typeof ConnectionRegistry>; maxRows: number } {
+      const defaultName = process.env.SQLSERVER_DEFAULT_CONNECTION || 'default';
+      const registry = new ConnectionRegistry(defaultName);
+
+      const domainSourcePath = process.env.SQLSERVER_DOMAIN_SOURCE_PATH;
+      if (domainSourcePath) {
+        console.error(`Domain source: ${domainSourcePath}`);
+      }
+
+      let maxRowsForTools = 1000;
+
+      const defaultConfig = buildDefaultConfigFromEnv();
+      if (defaultConfig) {
+        if (defaultConfig.authMode === 'sql' && (!defaultConfig.user || !defaultConfig.password)) {
+          throw new Error('SQLSERVER_USER and SQLSERVER_PASSWORD are required for SQL auth mode on the default connection');
+        }
+        const conn = new SqlServerConnection(defaultConfig);
+        const cachePath = buildSchemaCachePath('default', defaultConfig.database, process.env.SQLSERVER_SCHEMA_CACHE_PATH);
+        const cache = new SchemaCache(cachePath, domainSourcePath);
+        registry.register('default', conn, cache);
+        maxRowsForTools = defaultConfig.maxRows ?? 1000;
+        console.error(`Registered "default" -> ${defaultConfig.server}:${defaultConfig.port ?? 1433} (db: ${defaultConfig.database || 'default'}, auth: ${defaultConfig.authMode})`);
+        console.error(`Schema cache (default): ${cachePath}`);
+      }
+
+      const connectionsRaw = process.env.SQLSERVER_CONNECTIONS;
+      if (connectionsRaw) {
+        const parsed = NamedConnectionsMapSchema.parse(JSON.parse(connectionsRaw));
+        for (const [name, input] of Object.entries(parsed)) {
+          if (registry.has(name)) {
+            throw new Error(`Connection "${name}" is already defined (conflicts with default)`);
+          }
+          const cfg = configFromNamedInput(name, input);
+          if (cfg.authMode === 'sql' && (!cfg.user || !cfg.password)) {
+            throw new Error(`Connection "${name}" uses SQL auth and requires "user" and "password"`);
+          }
+          const conn = new SqlServerConnection(cfg);
+          const cachePath = buildSchemaCachePath(name, cfg.database);
+          const cache = new SchemaCache(cachePath, domainSourcePath);
+          registry.register(name, conn, cache);
+          if (defaultConfig === null && maxRowsForTools === 1000) {
+            maxRowsForTools = cfg.maxRows ?? 1000;
+          }
+          console.error(`Registered "${name}" -> ${cfg.server}:${cfg.port ?? 1433} (db: ${cfg.database || 'default'}, auth: ${cfg.authMode})`);
+          console.error(`Schema cache (${name}): ${cachePath}`);
+        }
+      }
+
+      if (registry.size() === 0) {
+        throw new Error('No SQL Server connections configured. Set SQLSERVER_HOST and/or SQLSERVER_CONNECTIONS.');
+      }
+
+      if (!registry.has(defaultName)) {
+        throw new Error(`SQLSERVER_DEFAULT_CONNECTION="${defaultName}" does not match any registered connection`);
+      }
+
+      return { registry, maxRows: maxRowsForTools };
+    }
 
     class SqlServerMCPServer {
       private server: typeof Server.prototype;
-      private connection!: typeof SqlServerConnection.prototype;
+      private registry!: InstanceType<typeof ConnectionRegistry>;
       private tools: Map<string, any> = new Map();
 
       constructor() {
         this.server = new Server(
           {
             name: 'mcp-sqlserver',
-            version: '2.0.3',
+            version: '2.0.7',
           },
           {
             capabilities: {
@@ -75,8 +196,8 @@ async function runServer() {
       }
 
       private async cleanup() {
-        if (this.connection) {
-          await this.connection.disconnect();
+        if (this.registry) {
+          await this.registry.disconnectAll();
         }
       }
 
@@ -93,13 +214,13 @@ async function runServer() {
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const { name, arguments: args } = request.params;
-          
+
           if (!this.tools.has(name)) {
             throw new Error(`Unknown tool: ${name}`);
           }
 
           const tool = this.tools.get(name);
-          
+
           try {
             const result = await tool.execute(args || {});
             return {
@@ -130,8 +251,9 @@ async function runServer() {
         });
       }
 
-      private initializeTools(maxRows: number, schemaCache: InstanceType<typeof SchemaCache>) {
+      private initializeTools(maxRows: number) {
         const toolClasses = [
+          ListConnectionsTool,
           TestConnectionTool,
           ListDatabasesTool,
           ListTablesTool,
@@ -145,45 +267,19 @@ async function runServer() {
         ];
 
         for (const ToolClass of toolClasses) {
-          const tool = new ToolClass(this.connection, maxRows);
-          // Inject schema cache into tools that need it
-          if ('setSchemaCache' in tool) {
-            (tool as any).setSchemaCache(schemaCache);
-          }
+          const tool = new ToolClass(this.registry, maxRows);
           this.tools.set(tool.getName(), tool);
         }
       }
 
-      async initialize(config: any) {
-        try {
-          this.connection = new SqlServerConnection(config);
-          
-          // Don't connect immediately in MCP mode - defer connection until first tool use
-          // This prevents the server from failing startup if SQL Server is temporarily unavailable
-          console.error(`MCP SQL Server initialized for ${config.server}:${config.port || 1433}`);
-          console.error(`Database: ${config.database || 'default'}, Auth: ${config.authMode || 'sql'}`);
-          console.error(`ApplicationIntent: ReadOnly`);
+      async initialize() {
+        const { registry, maxRows } = buildRegistry();
+        this.registry = registry;
 
-          // Initialize schema cache
-          // Uses SQLSERVER_SCHEMA_CACHE_PATH if set, otherwise derives from database name
-          const dbNameForCache = (config.database || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
-          const { fileURLToPath } = await import('url');
-          const { dirname: pathDirname, join: pathJoin } = await import('path');
-          const serverDir = pathDirname(fileURLToPath(import.meta.url));
-          const defaultCachePath = pathJoin(serverDir, '..', '.schema-cache', `${dbNameForCache}.md`);
-          const schemaCachePath = process.env.SQLSERVER_SCHEMA_CACHE_PATH || defaultCachePath;
-          const domainSourcePath = process.env.SQLSERVER_DOMAIN_SOURCE_PATH;
-          if (domainSourcePath) {
-            console.error(`Domain source: ${domainSourcePath}`);
-          }
-          const schemaCache = new SchemaCache(schemaCachePath, domainSourcePath);
-          console.error(`Schema cache: ${schemaCachePath}`);
+        console.error(`MCP SQL Server initialized with ${registry.size()} connection(s); default: "${registry.getDefaultName()}"`);
+        console.error(`ApplicationIntent: ReadOnly`);
 
-          this.initializeTools(config.maxRows || 1000, schemaCache);
-        } catch (error) {
-          console.error(`Initialization failed:`, error);
-          throw error;
-        }
+        this.initializeTools(maxRows);
       }
 
       async run() {
@@ -194,47 +290,14 @@ async function runServer() {
     }
 
     async function main() {
-      // Handle CLI arguments and help
       if (!handleCliArgs()) {
         return;
       }
 
-      // Read configuration from environment variables
-      const authMode = (process.env.SQLSERVER_AUTH_MODE || 'sql') as 'sql' | 'aad-default' | 'aad-password' | 'aad-service-principal';
-      const config = {
-        server: process.env.SQLSERVER_HOST || 'localhost',
-        database: process.env.SQLSERVER_DATABASE,
-        authMode,
-        user: process.env.SQLSERVER_USER,
-        password: process.env.SQLSERVER_PASSWORD,
-        clientId: process.env.SQLSERVER_CLIENT_ID,
-        clientSecret: process.env.SQLSERVER_CLIENT_SECRET,
-        tenantId: process.env.SQLSERVER_TENANT_ID,
-        port: parseInt(process.env.SQLSERVER_PORT || '1433'),
-        encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',
-        trustServerCertificate: process.env.SQLSERVER_TRUST_CERT === 'true',
-        connectionTimeout: parseInt(process.env.SQLSERVER_CONNECTION_TIMEOUT || '30000'),
-        requestTimeout: parseInt(process.env.SQLSERVER_REQUEST_TIMEOUT || '60000'),
-        maxRows: parseInt(process.env.SQLSERVER_MAX_ROWS || '1000'),
-      };
-
-      // Validate configuration
-      try {
-        ConnectionConfigSchema.parse(config);
-      } catch (error) {
-        console.error('Invalid configuration:', error);
-        process.exit(1);
-      }
-
-      if (authMode === 'sql' && (!config.user || !config.password)) {
-        console.error('Error: SQLSERVER_USER and SQLSERVER_PASSWORD environment variables are required for SQL auth mode');
-        process.exit(1);
-      }
-
       const server = new SqlServerMCPServer();
-      
+
       try {
-        await server.initialize(config);
+        await server.initialize();
         await server.run();
       } catch (error) {
         console.error('Failed to start server:', error);
@@ -243,7 +306,7 @@ async function runServer() {
     }
 
     await main();
-    
+
   } catch (error) {
     console.error('Failed to start MCP server:', (error as Error).message);
     process.exit(1);

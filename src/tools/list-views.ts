@@ -20,12 +20,13 @@ export class ListViewsTool extends BaseTool {
           type: 'string',
           description: 'Schema name to filter views (optional)',
         },
+        connection: this.getConnectionProperty(),
       },
       required: [],
     };
   }
 
-  async execute(params: { schema?: string }): Promise<ViewInfo[]> {
+  async execute(params: { schema?: string; connection?: string }): Promise<ViewInfo[]> {
     const validatedParams = ParameterValidator.validateListTablesParameters(params);
     const { schema } = validatedParams;
 
@@ -49,6 +50,6 @@ export class ListViewsTool extends BaseTool {
 
     query += ' ORDER BY TABLE_SCHEMA, TABLE_NAME';
 
-    return await this.executeSafeQueryWithParams<ViewInfo>(query, inputs);
+    return await this.executeSafeQueryWithParams<ViewInfo>(params.connection, query, inputs);
   }
 }

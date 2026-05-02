@@ -2,6 +2,7 @@ import { BaseTool } from './base.js';
 
 interface ConnectionTestResult {
   isConnected: boolean;
+  connectionName?: string;
   serverInfo?: {
     serverName: string;
     version: string;
@@ -29,29 +30,34 @@ export class TestConnectionTool extends BaseTool {
   getInputSchema(): any {
     return {
       type: 'object',
-      properties: {},
+      properties: {
+        connection: this.getConnectionProperty(),
+      },
       required: [],
     };
   }
 
-  async execute(): Promise<ConnectionTestResult> {
+  async execute(params: { connection?: string } = {}): Promise<ConnectionTestResult> {
     const startTime = Date.now();
+    const entry = this.resolveEntry(params.connection);
+    const connection = entry.connection;
+    const connectionName = params.connection ?? this.registry.getDefaultName();
+
     const result: ConnectionTestResult = {
       isConnected: false,
+      connectionName,
     };
 
     try {
-      // Test basic connection
-      await this.connection.connect();
+      await connection.connect();
       const connectionTime = Date.now() - startTime;
-      
+
       result.isConnected = true;
       result.connectionTime = connectionTime;
 
-      // Get basic server info
       try {
         const serverQuery = `
-          SELECT 
+          SELECT
             @@SERVERNAME as serverName,
             @@VERSION as version,
             SERVERPROPERTY('Edition') as edition,
@@ -59,8 +65,8 @@ export class TestConnectionTool extends BaseTool {
             CASE WHEN ENCRYPT_OPTION = 'TRUE' THEN 1 ELSE 0 END as encryptionEnabled
           FROM (SELECT 'TRUE' as ENCRYPT_OPTION) as dummy
         `;
-        
-        const serverInfo = await this.executeQuery(serverQuery);
+
+        const serverInfo = await this.runQuery(connection, serverQuery);
         if (serverInfo.length > 0) {
           const info = serverInfo[0];
           result.serverInfo = {
@@ -74,45 +80,39 @@ export class TestConnectionTool extends BaseTool {
         result.error = `Failed to get server info: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
 
-      // Test permissions
       const details = {
         canExecuteQueries: false,
         hasSystemAccess: false,
         encryptionEnabled: false,
       };
 
-      // Test basic query execution
       try {
-        await this.executeQuery('SELECT 1 as test');
+        await this.runQuery(connection, 'SELECT 1 as test');
         details.canExecuteQueries = true;
-      } catch (error) {
-        // Query execution failed
+      } catch {
+        // ignore
       }
 
-      // Test system view access
       try {
-        await this.executeQuery('SELECT TOP 1 name FROM sys.databases');
+        await this.runQuery(connection, 'SELECT TOP 1 name FROM sys.databases');
         details.hasSystemAccess = true;
-      } catch (error) {
-        // System access failed
+      } catch {
+        // ignore
       }
 
-      // Check encryption status
       try {
-        const encQuery = await this.executeQuery("SELECT ENCRYPT_OPTION() as encryption_status");
+        const encQuery = await this.runQuery(connection, "SELECT ENCRYPT_OPTION() as encryption_status");
         details.encryptionEnabled = encQuery.length > 0;
-      } catch (error) {
-        // Encryption check failed
+      } catch {
+        // ignore
       }
 
       result.details = details;
-
     } catch (error) {
       result.isConnected = false;
       result.connectionTime = Date.now() - startTime;
-      
+
       if (error instanceof Error) {
-        // Parse common SQL Server error codes for better messages
         const message = error.message;
         if (message.includes('Login failed')) {
           result.error = 'Authentication failed: Invalid username or password';

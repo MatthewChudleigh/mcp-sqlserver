@@ -13,14 +13,16 @@ export class ListDatabasesTool extends BaseTool {
   getInputSchema(): any {
     return {
       type: 'object',
-      properties: {},
+      properties: {
+        connection: this.getConnectionProperty(),
+      },
       required: [],
     };
   }
 
-  async execute(): Promise<DatabaseInfo[]> {
+  async execute(params: { connection?: string } = {}): Promise<DatabaseInfo[]> {
     const query = `
-      SELECT 
+      SELECT
         database_id,
         name,
         create_date,
@@ -31,6 +33,6 @@ export class ListDatabasesTool extends BaseTool {
       ORDER BY name
     `;
 
-    return await this.executeSafeQuery<DatabaseInfo>(query);
+    return await this.executeSafeQuery<DatabaseInfo>(params.connection, query);
   }
 }

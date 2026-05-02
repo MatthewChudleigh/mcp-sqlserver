@@ -20,12 +20,13 @@ export class ListTablesTool extends BaseTool {
           type: 'string',
           description: 'Schema name to filter tables (optional)',
         },
+        connection: this.getConnectionProperty(),
       },
       required: [],
     };
   }
 
-  async execute(params: { schema?: string }): Promise<TableInfo[]> {
+  async execute(params: { schema?: string; connection?: string }): Promise<TableInfo[]> {
     const validatedParams = ParameterValidator.validateListTablesParameters(params);
     const { schema } = validatedParams;
 
@@ -48,6 +49,6 @@ export class ListTablesTool extends BaseTool {
 
     query += ' ORDER BY TABLE_SCHEMA, TABLE_NAME';
 
-    return await this.executeSafeQueryWithParams<TableInfo>(query, inputs);
+    return await this.executeSafeQueryWithParams<TableInfo>(params.connection, query, inputs);
   }
 }

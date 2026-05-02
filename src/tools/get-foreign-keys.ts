@@ -25,12 +25,13 @@ export class GetForeignKeysTool extends BaseTool {
           description: 'Schema name (optional, defaults to dbo)',
           default: 'dbo',
         },
+        connection: this.getConnectionProperty(),
       },
       required: [],
     };
   }
 
-  async execute(params: { table_name?: string; schema?: string }): Promise<ForeignKeyInfo[]> {
+  async execute(params: { table_name?: string; schema?: string; connection?: string }): Promise<ForeignKeyInfo[]> {
     const validatedParams = ParameterValidator.validateForeignKeyParameters(params);
     const { table_name, schema = 'dbo' } = validatedParams;
 
@@ -67,6 +68,6 @@ export class GetForeignKeysTool extends BaseTool {
 
     query += ' ORDER BY table_schema, table_name, constraint_name';
 
-    return await this.executeSafeQueryWithParams<ForeignKeyInfo>(query, inputs);
+    return await this.executeSafeQueryWithParams<ForeignKeyInfo>(params.connection, query, inputs);
   }
 }

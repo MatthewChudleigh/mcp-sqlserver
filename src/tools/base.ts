@@ -1,49 +1,67 @@
 import { SqlServerConnection, QueryParam } from '../connection.js';
+import { ConnectionRegistry, ConnectionEntry } from '../connection-registry.js';
 import { QueryValidator } from '../security.js';
 import { ErrorHandler } from '../errors.js';
 
 export type { QueryParam };
 
 export abstract class BaseTool {
-  protected connection: SqlServerConnection;
+  protected registry: ConnectionRegistry;
   protected maxRows: number;
 
-  constructor(connection: SqlServerConnection, maxRows: number = 1000) {
-    this.connection = connection;
+  constructor(registry: ConnectionRegistry, maxRows: number = 1000) {
+    this.registry = registry;
     this.maxRows = maxRows;
   }
 
-  protected async executeQuery<T = any>(query: string): Promise<T[]> {
+  protected resolveEntry(connectionName?: string): ConnectionEntry {
+    return this.registry.resolve(connectionName);
+  }
+
+  protected resolveConnection(connectionName?: string): SqlServerConnection {
+    return this.registry.resolve(connectionName).connection;
+  }
+
+  protected getConnectionProperty(): { type: string; description: string } {
+    return {
+      type: 'string',
+      description: `Optional name of the configured SQL Server connection to target. Defaults to "${this.registry.getDefaultName()}". Use list_connections to see available connections.`,
+    };
+  }
+
+  protected async runQuery<T = any>(connection: SqlServerConnection, query: string): Promise<T[]> {
     const validation = QueryValidator.validateQuery(query);
     if (!validation.isValid) {
       throw new Error(`Query validation failed: ${validation.error}`);
     }
-
     const sanitizedQuery = QueryValidator.sanitizeQuery(query);
     const limitedQuery = QueryValidator.addRowLimit(sanitizedQuery, this.maxRows);
-
-    const result = await this.connection.query<T>(limitedQuery);
+    const result = await connection.query<T>(limitedQuery);
     return result.recordset;
   }
 
-  protected async executeSafeQuery<T = any>(query: string): Promise<T[]> {
+  protected async executeSafeQuery<T = any>(connectionName: string | undefined, query: string): Promise<T[]> {
+    const connection = this.resolveConnection(connectionName);
     try {
-      await this.connection.connect();
-      return await this.executeQuery<T>(query);
+      await connection.connect();
+      return await this.runQuery<T>(connection, query);
     } catch (error) {
-      const mcpError = ErrorHandler.handleSqlServerError(error);
-      throw mcpError;
+      throw ErrorHandler.handleSqlServerError(error);
     }
   }
 
-  protected async executeSafeQueryWithParams<T = any>(query: string, inputs: QueryParam[]): Promise<T[]> {
+  protected async executeSafeQueryWithParams<T = any>(
+    connectionName: string | undefined,
+    query: string,
+    inputs: QueryParam[],
+  ): Promise<T[]> {
+    const connection = this.resolveConnection(connectionName);
     try {
-      await this.connection.connect();
-      const result = await this.connection.queryWithParams<T>(query, inputs);
+      await connection.connect();
+      const result = await connection.queryWithParams<T>(query, inputs);
       return result.recordset;
     } catch (error) {
-      const mcpError = ErrorHandler.handleSqlServerError(error);
-      throw mcpError;
+      throw ErrorHandler.handleSqlServerError(error);
     }
   }
 
