@@ -94,9 +94,10 @@ export class ParameterValidator {
   }
 
   // Validate query parameters for execute_query tool
-  static validateQueryParameters(params: { query?: string; limit?: number }): {
+  static validateQueryParameters(params: { query?: string; limit?: number; params?: unknown }): {
     query: string;
     limit: number;
+    namedParams: Record<string, string | number | boolean | null>;
   } {
     const querySchema = z.string()
       .min(1, 'Query cannot be empty')
@@ -110,9 +111,23 @@ export class ParameterValidator {
       .optional()
       .default(1000);
 
+    // Named parameters bound out-of-band to @name placeholders. Keys must be
+    // valid SQL parameter identifiers; values are scalars only (objects/arrays
+    // cannot bind to a single placeholder).
+    const namedParamsSchema = z.record(
+      z.string().regex(
+        /^[A-Za-z_][A-Za-z0-9_]*$/,
+        'Parameter names must start with a letter or underscore and contain only letters, numbers, and underscores',
+      ),
+      z.union([z.string(), z.number(), z.boolean(), z.null()], {
+        errorMap: () => ({ message: 'Parameter values must be a string, number, boolean, or null' }),
+      }),
+    ).optional().default({});
+
     return {
       query: querySchema.parse(params.query),
       limit: limitSchema.parse(params.limit),
+      namedParams: namedParamsSchema.parse(params.params),
     };
   }
 

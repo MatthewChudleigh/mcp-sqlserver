@@ -68,7 +68,7 @@ For more information, visit: https://github.com/MatthewChudleigh/mcp-sqlserver
 }
 
 function showVersion() {
-  console.log('2.0.10');
+  console.log('2.1.0');
 }
 
 function validateEnvironment(): boolean {

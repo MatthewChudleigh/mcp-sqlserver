@@ -29,14 +29,20 @@ export abstract class BaseTool {
     };
   }
 
-  protected async runQuery<T = any>(connection: SqlServerConnection, query: string): Promise<T[]> {
+  protected async runQuery<T = any>(
+    connection: SqlServerConnection,
+    query: string,
+    namedParams?: Record<string, unknown>,
+  ): Promise<T[]> {
     const validation = QueryValidator.validateQuery(query);
     if (!validation.isValid) {
       throw new Error(`Query validation failed: ${validation.error}`);
     }
     const sanitizedQuery = QueryValidator.sanitizeQuery(query);
     const limitedQuery = QueryValidator.addRowLimit(sanitizedQuery, this.maxRows);
-    const result = await connection.query<T>(limitedQuery);
+    const result = namedParams && Object.keys(namedParams).length > 0
+      ? await connection.queryWithNamedParams<T>(limitedQuery, namedParams)
+      : await connection.query<T>(limitedQuery);
     return result.recordset;
   }
 

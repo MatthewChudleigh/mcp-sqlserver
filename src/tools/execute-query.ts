@@ -18,7 +18,12 @@ export class ExecuteQueryTool extends BaseTool {
       properties: {
         query: {
           type: 'string',
-          description: 'SQL SELECT query to execute (read-only operations only)',
+          description: 'SQL SELECT query to execute (read-only operations only). Use @name placeholders for any values and pass them via "params" instead of inlining literals.',
+        },
+        params: {
+          type: 'object',
+          description: 'Optional named parameters bound to @name placeholders in the query (e.g. {"as_of":"2026-05-30","years":3}). Values bind out-of-band and never enter the SQL text — the safe replacement for DECLARE/inline literals.',
+          additionalProperties: { type: ['string', 'number', 'boolean', 'null'] },
         },
         limit: {
           type: 'number',
@@ -32,9 +37,9 @@ export class ExecuteQueryTool extends BaseTool {
     };
   }
 
-  async execute(params: { query: string; limit?: number; connection?: string }): Promise<QueryResult & { schemaCachedAt?: string }> {
+  async execute(params: { query: string; params?: Record<string, unknown>; limit?: number; connection?: string }): Promise<QueryResult & { schemaCachedAt?: string }> {
     const validatedParams = ParameterValidator.validateQueryParameters(params);
-    const { query, limit } = validatedParams;
+    const { query, limit, namedParams } = validatedParams;
     const maxRows = limit;
 
     const startTime = Date.now();
@@ -61,7 +66,7 @@ export class ExecuteQueryTool extends BaseTool {
       const originalMaxRows = this.maxRows;
       this.maxRows = maxRows;
 
-      const result = await this.runQuery(connection, query);
+      const result = await this.runQuery(connection, query, namedParams);
       const executionTime = Date.now() - startTime;
 
       this.maxRows = originalMaxRows;

@@ -115,6 +115,25 @@ The MCP server only loads in **new** sessions. Try:
 - *"List all tables in the database"*
 - *"Show me the top 10 rows from the Users table"*
 
+## Parameterized Queries
+
+`execute_query` accepts an optional `params` object. Reference values as `@name`
+placeholders in the query and pass them in `params`; the driver binds them
+out-of-band, so they never become part of the SQL text:
+
+```json
+{
+  "query": "SELECT * FROM Customer WHERE DATEDIFF(YEAR, LastActivity, @as_of) >= @years",
+  "params": { "as_of": "2026-05-30", "years": 3 }
+}
+```
+
+This is the recommended way to write tunable read-only queries — it keeps
+constants out of the statement body and avoids any need for `DECLARE` (which is
+blocked, along with all other write/exec keywords). Parameter names must be
+valid SQL identifiers and values must be scalars (string, number, boolean, or
+null).
+
 ## Schema Cache
 
 On the first `execute_query` call in a session, the server automatically:

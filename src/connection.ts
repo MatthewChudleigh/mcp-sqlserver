@@ -129,6 +129,28 @@ export class SqlServerConnection {
     return await request.query(queryText);
   }
 
+  /**
+   * Run a query binding named parameters out-of-band. Each entry binds to an
+   * `@name` placeholder in the query; the mssql driver sends values separately
+   * from the SQL text (and infers the type from the value), so they can never
+   * change the query's structure. This is the safe replacement for inlining
+   * literals or DECLARE-ing variables in the statement body.
+   */
+  async queryWithNamedParams<T = any>(
+    queryText: string,
+    params: Record<string, unknown>,
+  ): Promise<sql.IResult<T>> {
+    if (!this.pool) {
+      throw new Error('Database connection not established');
+    }
+
+    const request = this.pool.request();
+    for (const [name, value] of Object.entries(params)) {
+      request.input(name, value);
+    }
+    return await request.query(queryText);
+  }
+
   async testConnection(): Promise<boolean> {
     try {
       await this.connect();
