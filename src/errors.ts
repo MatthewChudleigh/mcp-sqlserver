@@ -60,6 +60,23 @@ export class ErrorHandler {
     const message = error.message || error.toString();
     const code = error.code || error.number;
 
+    // Transport/connection-layer failures (mssql/tedious string codes). These
+    // are retryable — the connection was dropped or never opened — and must be
+    // distinguished from query/syntax errors so callers can react accordingly.
+    const CONNECTION_CODES = ['ECONNCLOSED', 'ENOTOPEN', 'ENOCONN', 'ESOCKET', 'ETIMEOUT', 'ECONNRESET'];
+    if (typeof code === 'string' && CONNECTION_CODES.includes(code)) {
+      if (code === 'ETIMEOUT') {
+        return new TimeoutError(
+          'Connection timeout: Server took too long to respond',
+          { originalError: message, code }
+        );
+      }
+      return new ConnectionError(
+        `Connection failed or was lost: ${message}`,
+        { originalError: message, code }
+      );
+    }
+
     // SQL Server specific error handling
     if (typeof code === 'number') {
       switch (code) {
@@ -136,10 +153,20 @@ export class ErrorHandler {
       );
     }
     
-    if (message.toLowerCase().includes('server was not found') || 
+    if (message.toLowerCase().includes('server was not found') ||
         message.toLowerCase().includes('network-related')) {
       return new ConnectionError(
         'Connection failed: Server not found or network issue',
+        { originalError: message }
+      );
+    }
+
+    if (message.toLowerCase().includes('connection is closed') ||
+        message.toLowerCase().includes('connection not yet open') ||
+        message.toLowerCase().includes('connection lost') ||
+        message.toLowerCase().includes('not connected')) {
+      return new ConnectionError(
+        `Connection lost or closed: ${message}`,
         { originalError: message }
       );
     }

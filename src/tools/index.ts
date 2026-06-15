@@ -8,5 +8,6 @@ export { GetForeignKeysTool } from './get-foreign-keys.js';
 export { GetServerInfoTool } from './get-server-info.js';
 export { GetTableStatsTool } from './get-table-stats.js';
 export { TestConnectionTool } from './test-connection.js';
+export { ResetConnectionTool } from './reset-connection.js';
 export { SnapshotSchemaTool } from './snapshot-schema.js';
 export { ListConnectionsTool } from './list-connections.js';

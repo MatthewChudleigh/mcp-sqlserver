@@ -3,6 +3,7 @@ import { BaseTool } from './base.js';
 interface ConnectionTestResult {
   isConnected: boolean;
   connectionName?: string;
+  recovered?: boolean;
   serverInfo?: {
     serverName: string;
     version: string;
@@ -50,10 +51,40 @@ export class TestConnectionTool extends BaseTool {
 
     try {
       await connection.connect();
-      const connectionTime = Date.now() - startTime;
 
-      result.isConnected = true;
-      result.connectionTime = connectionTime;
+      // Truthful health check: isConnected reflects an actual SELECT 1
+      // round-trip, not just that a pool object exists. connection.query()
+      // auto-recovers a faulted pool once; if that recovery happened the first
+      // probe would have thrown, so we re-probe and flag `recovered`.
+      try {
+        const probe = await connection.query('SELECT 1 as test');
+        result.isConnected = probe.recordset.length > 0;
+      } catch (probeError) {
+        // The pool was dead and auto-recovery did not succeed — force a reset
+        // and try once more so an agent can self-heal without a restart.
+        try {
+          await connection.resetConnection();
+          const probe = await connection.query('SELECT 1 as test');
+          result.isConnected = probe.recordset.length > 0;
+          if (result.isConnected) {
+            result.recovered = true;
+          }
+        } catch {
+          result.isConnected = false;
+          result.error = `Connection probe failed: ${probeError instanceof Error ? probeError.message : 'Unknown error'}`;
+        }
+      }
+
+      result.connectionTime = Date.now() - startTime;
+
+      if (!result.isConnected) {
+        result.details = {
+          canExecuteQueries: false,
+          hasSystemAccess: false,
+          encryptionEnabled: false,
+        };
+        return result;
+      }
 
       try {
         const serverQuery = `

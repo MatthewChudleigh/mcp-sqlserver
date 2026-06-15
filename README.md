@@ -16,7 +16,8 @@ Based on [bilims/mcp-sqlserver](https://github.com/bilims/mcp-sqlserver) with ad
 | `get_table_stats`  | Get row counts and table sizes                                                               |
 | `list_databases`   | List all databases on the server                                                             |
 | `get_server_info`  | Get SQL Server version and edition                                                           |
-| `test_connection`  | Verify the connection works                                                                  |
+| `test_connection`  | Verify the connection works with a real `SELECT 1` round-trip (auto-recovers a faulted pool) |
+| `reset_connection` | Force-rebuild the connection pool to recover from a connection fault without a restart        |
 | `snapshot_schema`  | Force-regenerate the schema cache file                                                       |
 
 ## Read-Only Safety
@@ -24,7 +25,7 @@ Based on [bilims/mcp-sqlserver](https://github.com/bilims/mcp-sqlserver) with ad
 Three independent layers prevent any write operations:
 
 1. **Connection level** — `ApplicationIntent=ReadOnly` is hardcoded (routes to read replicas when available)
-2. **Query validation** — Only `SELECT` and `WITH` statements are allowed. 17 keywords are blocked (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `EXEC`, `GRANT`, etc.) plus SQL injection pattern detection
+2. **Query validation** — Only `SELECT`/`WITH` (and `SHOW`/`DESCRIBE`/`EXPLAIN`) statements are allowed, and write/exec keywords (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `EXEC`, `GRANT`, etc.) and stacked statements are blocked. Validation runs against a structural skeleton (string literals and bracketed identifiers masked out), so legitimate read-only filters never trip a false positive
 3. **Database permissions** — Use a `db_datareader`-only account for defense in depth
 
 ## Setup

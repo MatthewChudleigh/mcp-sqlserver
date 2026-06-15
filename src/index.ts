@@ -31,6 +31,7 @@ async function runServer() {
       GetServerInfoTool,
       GetTableStatsTool,
       TestConnectionTool,
+      ResetConnectionTool,
       SnapshotSchemaTool,
       ListConnectionsTool,
     } = await import('./tools/index.js');
@@ -166,7 +167,7 @@ async function runServer() {
         this.server = new Server(
           {
             name: 'mcp-sqlserver',
-            version: '2.1.0',
+            version: '2.2.0',
           },
           {
             capabilities: {
@@ -255,6 +256,7 @@ async function runServer() {
         const toolClasses = [
           ListConnectionsTool,
           TestConnectionTool,
+          ResetConnectionTool,
           ListDatabasesTool,
           ListTablesTool,
           ListViewsTool,
