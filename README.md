@@ -180,6 +180,48 @@ This helps Claude translate domain concepts to accurate SQL queries.
 | `SQLSERVER_REQUEST_TIMEOUT`    | No                    | `60000`      | Query timeout in ms                                  |
 | `SQLSERVER_SCHEMA_CACHE_PATH`  | No                    | Auto-derived | Override schema cache file path                      |
 | `SQLSERVER_DOMAIN_SOURCE_PATH` | No                    |              | Path to C# project root with EF configurations       |
+| `SQLSERVER_CONFIG_FILE`        | No                    |              | Path to a JSON/YAML file describing multiple connections (see below) |
+| `SQLSERVER_CONNECTIONS`        | No                    |              | JSON string mapping name → connection config (inline alternative to the file) |
+| `SQLSERVER_DEFAULT_CONNECTION` | No                    | `default`    | Name of the connection used when no `connection` argument is given   |
+
+`SQLSERVER_HOST` is only required when you are **not** using `SQLSERVER_CONFIG_FILE` or `SQLSERVER_CONNECTIONS`.
+
+## Multiple Connections
+
+The server can register any number of named connections. Every tool accepts an optional `connection` argument to target one of them, and the `list_connections` tool reports what's configured. There are three ways to define them, and they can be combined:
+
+1. **Config file (recommended)** — set `SQLSERVER_CONFIG_FILE` to the path of a JSON or YAML file. This is the cleanest option for more than one connection: it's a real file (comments allowed, no JSON-in-a-string escaping), lives outside your committed config, and is shared across projects.
+
+   ```jsonc
+   // .mcp.json — carries only a path, nothing secret
+   "env": { "SQLSERVER_CONFIG_FILE": "${SQLSERVER_CONFIG_FILE:-~/.config/mcp-sqlserver/connections.yaml}" }
+   ```
+
+   ```yaml
+   # ~/.config/mcp-sqlserver/connections.yaml   (gitignored)
+   default: crid
+   connections:
+     crid:
+       host: db1.example.com
+       database: CRID
+       user: CridReadOnly
+       password: secret
+       trustServerCertificate: true
+     warehouse:
+       host: warehouse.example.com
+       database: DataWarehouse
+       user: reader
+       password: secret
+       maxRows: 5000
+   ```
+
+   A full annotated template is in [`examples/connections.example.yaml`](examples/connections.example.yaml). Each connection accepts the same fields as the default connection (`host`/`server`, `database`, `authMode`, `user`, `password`, `clientId`, `clientSecret`, `tenantId`, `port`, `encrypt`, `trustServerCertificate`, `maxRows`, and an optional `schemaCachePath`).
+
+2. **Inline JSON** — set `SQLSERVER_CONNECTIONS` to a JSON string with the same `name → config` shape (no top-level `default`/`domainSourcePath` keys — those come from env vars). Handy for a single extra connection without a file.
+
+3. **Default connection** — the flat `SQLSERVER_HOST`/`SQLSERVER_USER`/… vars register a connection named `default`.
+
+`SQLSERVER_DEFAULT_CONNECTION` (env) overrides the file's `default:` field. Names must be unique across all three sources; a collision fails fast at startup.
 
 ## Azure AD Auth Modes
 

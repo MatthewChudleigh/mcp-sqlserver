@@ -38,6 +38,7 @@ async function runServer() {
     const { ErrorHandler } = await import('./errors.js');
     const { SchemaCache } = await import('./schema-cache.js');
     const { ConnectionRegistry } = await import('./connection-registry.js');
+    const { loadConnectionFile } = await import('./config-file.js');
 
     type ConnConfig = import('./types.js').ConnectionConfig;
     type NamedInput = import('./types.js').NamedConnectionInput;
@@ -100,15 +101,42 @@ async function runServer() {
     }
 
     function buildRegistry(): { registry: InstanceType<typeof ConnectionRegistry>; maxRows: number } {
-      const defaultName = process.env.SQLSERVER_DEFAULT_CONNECTION || 'default';
+      // The config file (if any) supplies its own default + domain source, but an
+      // explicit env var always wins over the file so a single connection can be
+      // overridden without editing the file.
+      const configFilePath = process.env.SQLSERVER_CONFIG_FILE;
+      const fileConfig = configFilePath ? loadConnectionFile(configFilePath) : null;
+      if (fileConfig) {
+        console.error(`Loaded connection config file: ${configFilePath}`);
+      }
+
+      const defaultName =
+        process.env.SQLSERVER_DEFAULT_CONNECTION || fileConfig?.default || 'default';
       const registry = new ConnectionRegistry(defaultName);
 
-      const domainSourcePath = process.env.SQLSERVER_DOMAIN_SOURCE_PATH;
+      const domainSourcePath =
+        process.env.SQLSERVER_DOMAIN_SOURCE_PATH || fileConfig?.domainSourcePath;
       if (domainSourcePath) {
         console.error(`Domain source: ${domainSourcePath}`);
       }
 
-      let maxRowsForTools = 1000;
+      // Register one named connection from a NamedConnectionInput (used for both
+      // SQLSERVER_CONNECTIONS entries and config-file entries).
+      function registerNamed(name: string, input: NamedInput, source: string): void {
+        if (registry.has(name)) {
+          throw new Error(`Connection "${name}" from ${source} conflicts with an already-registered connection`);
+        }
+        const cfg = configFromNamedInput(name, input);
+        if (cfg.authMode === 'sql' && (!cfg.user || !cfg.password)) {
+          throw new Error(`Connection "${name}" uses SQL auth and requires "user" and "password"`);
+        }
+        const conn = new SqlServerConnection(cfg);
+        const cachePath = buildSchemaCachePath(name, cfg.database, input.schemaCachePath);
+        const cache = new SchemaCache(cachePath, domainSourcePath);
+        registry.register(name, conn, cache);
+        console.error(`Registered "${name}" -> ${cfg.server}:${cfg.port ?? 1433} (db: ${cfg.database || 'default'}, auth: ${cfg.authMode})`);
+        console.error(`Schema cache (${name}): ${cachePath}`);
+      }
 
       const defaultConfig = buildDefaultConfigFromEnv();
       if (defaultConfig) {
@@ -119,7 +147,6 @@ async function runServer() {
         const cachePath = buildSchemaCachePath('default', defaultConfig.database, process.env.SQLSERVER_SCHEMA_CACHE_PATH);
         const cache = new SchemaCache(cachePath, domainSourcePath);
         registry.register('default', conn, cache);
-        maxRowsForTools = defaultConfig.maxRows ?? 1000;
         console.error(`Registered "default" -> ${defaultConfig.server}:${defaultConfig.port ?? 1433} (db: ${defaultConfig.database || 'default'}, auth: ${defaultConfig.authMode})`);
         console.error(`Schema cache (default): ${cachePath}`);
       }
@@ -128,34 +155,29 @@ async function runServer() {
       if (connectionsRaw) {
         const parsed = NamedConnectionsMapSchema.parse(JSON.parse(connectionsRaw));
         for (const [name, input] of Object.entries(parsed)) {
-          if (registry.has(name)) {
-            throw new Error(`Connection "${name}" is already defined (conflicts with default)`);
-          }
-          const cfg = configFromNamedInput(name, input);
-          if (cfg.authMode === 'sql' && (!cfg.user || !cfg.password)) {
-            throw new Error(`Connection "${name}" uses SQL auth and requires "user" and "password"`);
-          }
-          const conn = new SqlServerConnection(cfg);
-          const cachePath = buildSchemaCachePath(name, cfg.database);
-          const cache = new SchemaCache(cachePath, domainSourcePath);
-          registry.register(name, conn, cache);
-          if (defaultConfig === null && maxRowsForTools === 1000) {
-            maxRowsForTools = cfg.maxRows ?? 1000;
-          }
-          console.error(`Registered "${name}" -> ${cfg.server}:${cfg.port ?? 1433} (db: ${cfg.database || 'default'}, auth: ${cfg.authMode})`);
-          console.error(`Schema cache (${name}): ${cachePath}`);
+          registerNamed(name, input, 'SQLSERVER_CONNECTIONS');
+        }
+      }
+
+      if (fileConfig) {
+        for (const [name, input] of Object.entries(fileConfig.connections)) {
+          registerNamed(name, input, 'SQLSERVER_CONFIG_FILE');
         }
       }
 
       if (registry.size() === 0) {
-        throw new Error('No SQL Server connections configured. Set SQLSERVER_HOST and/or SQLSERVER_CONNECTIONS.');
+        throw new Error('No SQL Server connections configured. Set SQLSERVER_HOST, SQLSERVER_CONNECTIONS, and/or SQLSERVER_CONFIG_FILE.');
       }
 
       if (!registry.has(defaultName)) {
-        throw new Error(`SQLSERVER_DEFAULT_CONNECTION="${defaultName}" does not match any registered connection`);
+        throw new Error(`Default connection "${defaultName}" does not match any registered connection`);
       }
 
-      return { registry, maxRows: maxRowsForTools };
+      // A single global row cap is applied to every tool; take it from whichever
+      // connection is the default.
+      const maxRows = registry.resolve(defaultName).connection.getConfig().maxRows ?? 1000;
+
+      return { registry, maxRows };
     }
 
     class SqlServerMCPServer {
@@ -167,7 +189,7 @@ async function runServer() {
         this.server = new Server(
           {
             name: 'mcp-sqlserver',
-            version: '2.2.1',
+            version: '2.3.0',
           },
           {
             capabilities: {

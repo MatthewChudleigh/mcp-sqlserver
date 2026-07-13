@@ -1,6 +1,6 @@
 {
   "name": "mcp-sqlserver",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Read-only MCP server for Microsoft SQL Server — safely explore schemas and query databases.",
   "author": {
     "name": "Bilims",

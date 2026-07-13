@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { ConnectionConfigSchema, NamedConnectionsMapSchema } from './types.js';
+import { loadConnectionFile } from './config-file.js';
 
 function showHelp() {
   console.log(`
@@ -19,18 +20,42 @@ ENVIRONMENT VARIABLES (default connection):
   SQLSERVER_TRUST_CERT Trust server certificate (optional, default: false)
 
 ADDITIONAL CONNECTIONS:
+  SQLSERVER_CONFIG_FILE  Path to a JSON or YAML file describing all connections.
+                         Cleanest option for multiple connections — real file,
+                         comments allowed, no JSON-in-a-string escaping. See the
+                         example below.
   SQLSERVER_CONNECTIONS  JSON object mapping connection name -> connection config.
                          Each entry accepts the same fields as the default
                          connection (server/host, user, password, database, port,
                          encrypt, trustServerCertificate, authMode, etc.).
   SQLSERVER_DEFAULT_CONNECTION  Optional name of the connection to treat as the
-                                default. If unset, the SQLSERVER_HOST connection
-                                is registered as "default".
+                                default. Overrides the "default" field in the
+                                config file. If unset, the SQLSERVER_HOST
+                                connection is registered as "default".
 
   Tools accept an optional "connection" argument to target a specific server.
   Use the list_connections tool to discover configured names.
 
-EXAMPLE:
+EXAMPLE (config file):
+  export SQLSERVER_CONFIG_FILE="~/.config/mcp-sqlserver/connections.yaml"
+  mcp-sqlserver
+
+  # connections.yaml
+  default: crid
+  connections:
+    crid:
+      host: db1.example.com
+      database: CRID
+      user: CridReadOnly
+      password: secret
+      trustServerCertificate: true
+    warehouse:
+      host: warehouse.example.com
+      database: DataWarehouse
+      user: reader
+      password: secret
+
+EXAMPLE (inline env):
   export SQLSERVER_HOST="primary.example.com"
   export SQLSERVER_USER="reader"
   export SQLSERVER_PASSWORD="secret"
@@ -68,18 +93,29 @@ For more information, visit: https://github.com/MatthewChudleigh/mcp-sqlserver
 }
 
 function showVersion() {
-  console.log('2.2.1');
+  console.log('2.3.0');
 }
 
 function validateEnvironment(): boolean {
   const hasDefaultHost = Boolean(process.env.SQLSERVER_HOST);
   const connectionsRaw = process.env.SQLSERVER_CONNECTIONS;
+  const configFilePath = process.env.SQLSERVER_CONFIG_FILE;
 
-  if (!hasDefaultHost && !connectionsRaw) {
+  if (!hasDefaultHost && !connectionsRaw && !configFilePath) {
     console.error('❌ No SQL Server connection configured.');
     console.error('   Set SQLSERVER_HOST (and credentials) for a single/default connection,');
-    console.error('   and/or SQLSERVER_CONNECTIONS (JSON) to register additional named connections.');
+    console.error('   SQLSERVER_CONNECTIONS (JSON) to register additional named connections,');
+    console.error('   and/or SQLSERVER_CONFIG_FILE (path to a JSON/YAML connections file).');
     return false;
+  }
+
+  if (configFilePath) {
+    try {
+      loadConnectionFile(configFilePath);
+    } catch (error) {
+      console.error(`❌ ${(error as Error).message}`);
+      return false;
+    }
   }
 
   if (hasDefaultHost) {

@@ -4,6 +4,8 @@
       "command": "npx",
       "args": ["-y", "@ibergeni/mcp-sqlserver"],
       "env": {
+        "SQLSERVER_CONFIG_FILE": "${SQLSERVER_CONFIG_FILE:-}",
+        "SQLSERVER_DEFAULT_CONNECTION": "${SQLSERVER_DEFAULT_CONNECTION:-}",
         "SQLSERVER_AUTH_MODE": "${SQLSERVER_AUTH_MODE:-}",
         "SQLSERVER_HOST": "${SQLSERVER_HOST:-}",
         "SQLSERVER_PORT": "${SQLSERVER_PORT:-}",

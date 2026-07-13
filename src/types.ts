@@ -37,6 +37,9 @@ export const NamedConnectionInputSchema = z.object({
   connectionTimeout: z.number().optional(),
   requestTimeout: z.number().optional(),
   maxRows: z.number().optional(),
+  // Optional per-connection override for the schema cache markdown file.
+  // When omitted, the path is auto-derived from the connection name + database.
+  schemaCachePath: z.string().optional(),
 }).refine(v => Boolean(v.server || v.host), {
   message: 'Each connection must specify either "server" or "host"',
 });
@@ -45,6 +48,23 @@ export type NamedConnectionInput = z.infer<typeof NamedConnectionInputSchema>;
 
 export const NamedConnectionsMapSchema = z.record(z.string(), NamedConnectionInputSchema);
 export type NamedConnectionsMap = z.infer<typeof NamedConnectionsMapSchema>;
+
+// Schema for the external config file referenced by SQLSERVER_CONFIG_FILE.
+// The file may be JSON or YAML (JSON is valid YAML, so both parse identically).
+// It carries all named connections plus optional top-level settings so a whole
+// multi-connection setup can live in one commented, gitignored file instead of
+// a JSON string crammed into an env var.
+export const ConnectionFileSchema = z.object({
+  // Name of the connection to treat as the default. Overridden by the
+  // SQLSERVER_DEFAULT_CONNECTION env var when that is set.
+  default: z.string().optional(),
+  // Path to a C# project root with EF configurations, used to enrich the schema
+  // cache. Overridden by the SQLSERVER_DOMAIN_SOURCE_PATH env var when set.
+  domainSourcePath: z.string().optional(),
+  connections: NamedConnectionsMapSchema,
+});
+
+export type ConnectionFile = z.infer<typeof ConnectionFileSchema>;
 
 export interface TableInfo {
   table_catalog: string;

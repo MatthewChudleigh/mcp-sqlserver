@@ -1,0 +1,44 @@
+# Example connections file for mcp-sqlserver.
+#
+# Point the server at this file with a single env var:
+#   SQLSERVER_CONFIG_FILE=/path/to/connections.yaml
+#
+# The file may be YAML (shown here) or JSON — JSON is valid YAML, so both parse
+# the same way. Keep the real file out of source control (it holds credentials)
+# and reference secrets from your OS environment where you can.
+
+# Which connection tools use when no "connection" argument is given.
+# Overridden by the SQLSERVER_DEFAULT_CONNECTION env var if that is set.
+default: crid
+
+# Optional: path to a C# project root with EF configurations, used to enrich the
+# generated schema cache. Overridden by SQLSERVER_DOMAIN_SOURCE_PATH.
+# domainSourcePath: C:/Source/DevOps/ev-braze-connector/tmp/schema/domain
+
+connections:
+  crid:
+    host: db1.prod.internal.example.com
+    database: CRID
+    authMode: sql
+    user: CridReadOnly
+    password: change-me # or inject via your shell / secret manager
+    encrypt: true
+    trustServerCertificate: true
+    # Optional per-connection override for the schema cache markdown file:
+    # schemaCachePath: C:/Source/DevOps/ev-braze-connector/tmp/schema/cache/crid.md
+
+  warehouse:
+    host: warehouse.prod.internal.example.com
+    database: DataWarehouse
+    user: reader
+    password: change-me
+    maxRows: 5000
+
+  # Azure AD example — no password needed with aad-default (uses az login /
+  # managed identity):
+  # analytics:
+  #   host: analytics.database.windows.net
+  #   database: Analytics
+  #   authMode: aad-default
+  #   encrypt: true
+  #   trustServerCertificate: false
