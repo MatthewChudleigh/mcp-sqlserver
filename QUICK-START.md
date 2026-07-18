@@ -15,14 +15,23 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "sqlserver": {
       "command": "mcp-sqlserver",
       "env": {
-        "SQLSERVER_HOST": "your-server",
-        "SQLSERVER_USER": "your-username",
-        "SQLSERVER_PASSWORD": "your-password",
-        "SQLSERVER_DATABASE": "your-database"
+        "SQLSERVER_CONFIG_FILE": "~/.config/mcp-sqlserver/connections.yaml"
       }
     }
   }
 }
+```
+
+Then create the connections file it points at:
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+default: main
+connections:
+  main:
+    host: your-server
+    database: your-database
+    user: your-username
+    password: your-password
 ```
 
 ### 3. Test in Claude Desktop
@@ -49,31 +58,40 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ## 🔧 Common Configurations
 
-### Azure SQL Database
+The MCP client config always points at the connections file:
 ```json
 "env": {
-  "SQLSERVER_HOST": "myserver.database.windows.net",
-  "SQLSERVER_ENCRYPT": "true",
-  "SQLSERVER_TRUST_CERT": "false"
+  "SQLSERVER_CONFIG_FILE": "~/.config/mcp-sqlserver/connections.yaml"
 }
+```
+
+Pick the matching connection entry for that file:
+
+### Azure SQL Database
+```yaml
+connections:
+  main:
+    host: myserver.database.windows.net
+    encrypt: true
+    trustServerCertificate: false
 ```
 
 ### On-Premises SQL Server
-```json
-"env": {
-  "SQLSERVER_HOST": "sql-server.company.com",
-  "SQLSERVER_ENCRYPT": "true", 
-  "SQLSERVER_TRUST_CERT": "true"
-}
+```yaml
+connections:
+  main:
+    host: sql-server.company.com
+    encrypt: true
+    trustServerCertificate: true
 ```
 
 ### Local SQL Server Express
-```json
-"env": {
-  "SQLSERVER_HOST": "localhost\\SQLEXPRESS",
-  "SQLSERVER_ENCRYPT": "false",
-  "SQLSERVER_TRUST_CERT": "true"
-}
+```yaml
+connections:
+  main:
+    host: localhost\SQLEXPRESS
+    encrypt: false
+    trustServerCertificate: true
 ```
 
 ## 🛠️ Available Tools

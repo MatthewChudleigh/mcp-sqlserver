@@ -19,7 +19,6 @@ async function runServer() {
     const { SqlServerConnection } = await import('./connection.js');
     const {
       ConnectionConfigSchema,
-      NamedConnectionsMapSchema,
     } = await import('./types.js');
     const {
       ListDatabasesTool,
@@ -54,28 +53,6 @@ async function runServer() {
       return pathJoin(cacheBaseDir, filename);
     }
 
-    function buildDefaultConfigFromEnv(): ConnConfig | null {
-      if (!process.env.SQLSERVER_HOST) return null;
-      const authMode = (process.env.SQLSERVER_AUTH_MODE || 'sql') as ConnConfig['authMode'];
-      const config = {
-        server: process.env.SQLSERVER_HOST,
-        database: process.env.SQLSERVER_DATABASE,
-        authMode,
-        user: process.env.SQLSERVER_USER,
-        password: process.env.SQLSERVER_PASSWORD,
-        clientId: process.env.SQLSERVER_CLIENT_ID,
-        clientSecret: process.env.SQLSERVER_CLIENT_SECRET,
-        tenantId: process.env.SQLSERVER_TENANT_ID,
-        port: parseInt(process.env.SQLSERVER_PORT || '1433'),
-        encrypt: process.env.SQLSERVER_ENCRYPT !== 'false',
-        trustServerCertificate: process.env.SQLSERVER_TRUST_CERT === 'true',
-        connectionTimeout: parseInt(process.env.SQLSERVER_CONNECTION_TIMEOUT || '30000'),
-        requestTimeout: parseInt(process.env.SQLSERVER_REQUEST_TIMEOUT || '60000'),
-        maxRows: parseInt(process.env.SQLSERVER_MAX_ROWS || '1000'),
-      };
-      return ConnectionConfigSchema.parse(config);
-    }
-
     function configFromNamedInput(name: string, input: NamedInput): ConnConfig {
       const server = input.server ?? input.host;
       if (!server) {
@@ -101,27 +78,32 @@ async function runServer() {
     }
 
     function buildRegistry(): { registry: InstanceType<typeof ConnectionRegistry>; maxRows: number } {
-      // The config file (if any) supplies its own default + domain source, but an
-      // explicit env var always wins over the file so a single connection can be
-      // overridden without editing the file.
+      // All configuration lives in the SQLSERVER_CONFIG_FILE (JSON/YAML): it is the
+      // single source of truth for connections, the default connection, and the
+      // optional EF domain source. Nothing is read from other environment variables.
       const configFilePath = process.env.SQLSERVER_CONFIG_FILE;
-      const fileConfig = configFilePath ? loadConnectionFile(configFilePath) : null;
-      if (fileConfig) {
-        console.error(`Loaded connection config file: ${configFilePath}`);
+      if (!configFilePath) {
+        throw new Error('SQLSERVER_CONFIG_FILE is not set. Point it at a JSON/YAML file describing your connections (see examples/connections.example.yaml).');
       }
+      const fileConfig = loadConnectionFile(configFilePath);
+      console.error(`Loaded connection config file: ${configFilePath}`);
 
+      // The default connection comes from the file's "default" field, or is the
+      // sole connection when only one is defined.
+      const connectionNames = Object.keys(fileConfig.connections);
       const defaultName =
-        process.env.SQLSERVER_DEFAULT_CONNECTION || fileConfig?.default || 'default';
+        fileConfig.default ?? (connectionNames.length === 1 ? connectionNames[0] : undefined);
+      if (!defaultName) {
+        throw new Error(`Config file "${configFilePath}" defines multiple connections but no "default"; add a top-level "default:" naming one of: ${connectionNames.join(', ')}`);
+      }
       const registry = new ConnectionRegistry(defaultName);
 
-      const domainSourcePath =
-        process.env.SQLSERVER_DOMAIN_SOURCE_PATH || fileConfig?.domainSourcePath;
+      const domainSourcePath = fileConfig.domainSourcePath;
       if (domainSourcePath) {
         console.error(`Domain source: ${domainSourcePath}`);
       }
 
-      // Register one named connection from a NamedConnectionInput (used for both
-      // SQLSERVER_CONNECTIONS entries and config-file entries).
+      // Register one named connection from a NamedConnectionInput.
       function registerNamed(name: string, input: NamedInput, source: string): void {
         if (registry.has(name)) {
           throw new Error(`Connection "${name}" from ${source} conflicts with an already-registered connection`);
@@ -138,35 +120,8 @@ async function runServer() {
         console.error(`Schema cache (${name}): ${cachePath}`);
       }
 
-      const defaultConfig = buildDefaultConfigFromEnv();
-      if (defaultConfig) {
-        if (defaultConfig.authMode === 'sql' && (!defaultConfig.user || !defaultConfig.password)) {
-          throw new Error('SQLSERVER_USER and SQLSERVER_PASSWORD are required for SQL auth mode on the default connection');
-        }
-        const conn = new SqlServerConnection(defaultConfig);
-        const cachePath = buildSchemaCachePath('default', defaultConfig.database, process.env.SQLSERVER_SCHEMA_CACHE_PATH);
-        const cache = new SchemaCache(cachePath, domainSourcePath);
-        registry.register('default', conn, cache);
-        console.error(`Registered "default" -> ${defaultConfig.server}:${defaultConfig.port ?? 1433} (db: ${defaultConfig.database || 'default'}, auth: ${defaultConfig.authMode})`);
-        console.error(`Schema cache (default): ${cachePath}`);
-      }
-
-      const connectionsRaw = process.env.SQLSERVER_CONNECTIONS;
-      if (connectionsRaw) {
-        const parsed = NamedConnectionsMapSchema.parse(JSON.parse(connectionsRaw));
-        for (const [name, input] of Object.entries(parsed)) {
-          registerNamed(name, input, 'SQLSERVER_CONNECTIONS');
-        }
-      }
-
-      if (fileConfig) {
-        for (const [name, input] of Object.entries(fileConfig.connections)) {
-          registerNamed(name, input, 'SQLSERVER_CONFIG_FILE');
-        }
-      }
-
-      if (registry.size() === 0) {
-        throw new Error('No SQL Server connections configured. Set SQLSERVER_HOST, SQLSERVER_CONNECTIONS, and/or SQLSERVER_CONFIG_FILE.');
+      for (const [name, input] of Object.entries(fileConfig.connections)) {
+        registerNamed(name, input, 'SQLSERVER_CONFIG_FILE');
       }
 
       if (!registry.has(defaultName)) {
@@ -189,7 +144,7 @@ async function runServer() {
         this.server = new Server(
           {
             name: 'mcp-sqlserver',
-            version: '2.3.0',
+            version: '3.0.0',
           },
           {
             capabilities: {

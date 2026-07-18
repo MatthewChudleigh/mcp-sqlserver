@@ -18,7 +18,7 @@ This document provides practical examples of how to use the MCP SQL Server tools
 npm install -g @bilims/mcp-sqlserver
 
 # Verify installation
-mcp-sqlserver --version  # Should show 2.0.0
+mcp-sqlserver --version  # Should show 3.0.0
 
 # Check available tools
 mcp-sqlserver --help
@@ -33,16 +33,25 @@ mcp-sqlserver --help
     "sqlserver": {
       "command": "mcp-sqlserver",
       "env": {
-        "SQLSERVER_HOST": "mycompany.database.windows.net",
-        "SQLSERVER_USER": "myuser@mycompany",
-        "SQLSERVER_PASSWORD": "MySecurePassword123!",
-        "SQLSERVER_DATABASE": "ProductionDB",
-        "SQLSERVER_ENCRYPT": "true",
-        "SQLSERVER_TRUST_CERT": "false"
+        "SQLSERVER_CONFIG_FILE": "~/.config/mcp-sqlserver/connections.yaml"
       }
     }
   }
 }
+```
+
+With the connections file:
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+default: main
+connections:
+  main:
+    host: mycompany.database.windows.net
+    database: ProductionDB
+    user: myuser@mycompany
+    password: MySecurePassword123!
+    encrypt: true
+    trustServerCertificate: false
 ```
 
 #### On-Premises SQL Server Setup
@@ -52,16 +61,25 @@ mcp-sqlserver --help
     "sqlserver": {
       "command": "mcp-sqlserver",
       "env": {
-        "SQLSERVER_HOST": "sql-server.company.local",
-        "SQLSERVER_USER": "db_reader",
-        "SQLSERVER_PASSWORD": "ReadOnlyPassword123",
-        "SQLSERVER_DATABASE": "CompanyDB",
-        "SQLSERVER_ENCRYPT": "true",
-        "SQLSERVER_TRUST_CERT": "true"
+        "SQLSERVER_CONFIG_FILE": "~/.config/mcp-sqlserver/connections.yaml"
       }
     }
   }
 }
+```
+
+With the connections file:
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+default: main
+connections:
+  main:
+    host: sql-server.company.local
+    database: CompanyDB
+    user: db_reader
+    password: ReadOnlyPassword123
+    encrypt: true
+    trustServerCertificate: true
 ```
 
 ### 3. First Connection Test
@@ -387,7 +405,7 @@ User: "I'm getting connection errors"
 
 Solution Steps:
 1. "Test the SQL Server connection" - Check basic connectivity
-2. Verify your environment variables in Claude Desktop config
+2. Verify your `SQLSERVER_CONFIG_FILE` path and the connection fields in that file
 3. Check if server allows remote connections
 4. Verify firewall settings and network access
 ```

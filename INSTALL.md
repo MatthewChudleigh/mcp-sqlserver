@@ -47,38 +47,50 @@ npx mcp-sqlserver --help
 # You should see usage information if installed correctly
 ```
 
-### 3. Configure Environment Variables
+### 3. Create the Connections File
 
-Create a `.env` file or set environment variables:
+All configuration now lives in a single JSON or YAML file. Point the `SQLSERVER_CONFIG_FILE` environment variable at it; the server reads no other per-connection environment variables.
 
-#### Option A: Environment Variables
 ```bash
-export SQLSERVER_HOST="your-server.database.windows.net"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
-export SQLSERVER_DATABASE="your-database"
-export SQLSERVER_ENCRYPT="true"
-export SQLSERVER_TRUST_CERT="false"  # Use "true" for self-signed certificates
+export SQLSERVER_CONFIG_FILE="~/.config/mcp-sqlserver/connections.yaml"
 ```
 
-#### Option B: .env File
-Create a `.env` file in your project directory:
-```env
-SQLSERVER_HOST=your-server.database.windows.net
-SQLSERVER_USER=your-username
-SQLSERVER_PASSWORD=your-password
-SQLSERVER_DATABASE=your-database
-SQLSERVER_ENCRYPT=true
-SQLSERVER_TRUST_CERT=false
+Create the file it points at (YAML shown here since it allows comments):
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+default: main
+connections:
+  main:
+    host: your-server.database.windows.net
+    database: your-database
+    user: your-username
+    password: your-password
+    encrypt: true
+    trustServerCertificate: false   # set true for self-signed certificates
+```
+
+The same file may be written as JSON, in which case booleans and numbers are real JSON literals:
+```json
+{
+  "default": "main",
+  "connections": {
+    "main": {
+      "host": "your-server.database.windows.net",
+      "database": "your-database",
+      "user": "your-username",
+      "password": "your-password",
+      "encrypt": true,
+      "trustServerCertificate": false
+    }
+  }
+}
 ```
 
 ### 4. Test the Connection
 
 ```bash
-# Set environment variables first (if not using .env file)
-export SQLSERVER_HOST="your-server"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
+# Point at your connections file first
+export SQLSERVER_CONFIG_FILE="~/.config/mcp-sqlserver/connections.yaml"
 
 # Test the connection
 mcp-sqlserver
@@ -106,16 +118,25 @@ MCP SQL Server running on stdio
     "sqlserver": {
       "command": "mcp-sqlserver",
       "env": {
-        "SQLSERVER_HOST": "your-server.database.windows.net",
-        "SQLSERVER_USER": "your-username",
-        "SQLSERVER_PASSWORD": "your-password",
-        "SQLSERVER_DATABASE": "your-database",
-        "SQLSERVER_ENCRYPT": "true",
-        "SQLSERVER_TRUST_CERT": "false"
+        "SQLSERVER_CONFIG_FILE": "~/.config/mcp-sqlserver/connections.yaml"
       }
     }
   }
 }
+```
+
+With a corresponding connections file:
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+default: main
+connections:
+  main:
+    host: your-server.database.windows.net
+    database: your-database
+    user: your-username
+    password: your-password
+    encrypt: true
+    trustServerCertificate: false
 ```
 
 3. **Restart Claude Desktop**
@@ -128,13 +149,20 @@ MCP SQL Server running on stdio
 ### Claude Code CLI
 
 ```bash
-# Set environment variables
-export SQLSERVER_HOST="your-server"
-export SQLSERVER_USER="your-username"
-export SQLSERVER_PASSWORD="your-password"
+# Add to Claude Code, pointing at your connections file
+claude mcp add sqlserver mcp-sqlserver -e SQLSERVER_CONFIG_FILE=~/.config/mcp-sqlserver/connections.yaml
+```
 
-# Add to Claude Code
-claude mcp add sqlserver mcp-sqlserver
+The connections file it references:
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+default: main
+connections:
+  main:
+    host: your-server
+    database: your-database
+    user: your-username
+    password: your-password
 ```
 
 ### VSCode
@@ -145,53 +173,76 @@ claude mcp add sqlserver mcp-sqlserver
 
 ## Common Configuration Examples
 
+These are entries for your `SQLSERVER_CONFIG_FILE` connections file.
+
 ### Azure SQL Database
-```env
-SQLSERVER_HOST=your-server.database.windows.net
-SQLSERVER_PORT=1433
-SQLSERVER_ENCRYPT=true
-SQLSERVER_TRUST_CERT=false
+```yaml
+connections:
+  main:
+    host: your-server.database.windows.net
+    port: 1433
+    encrypt: true
+    trustServerCertificate: false
 ```
 
 ### On-Premises SQL Server with Self-Signed Certificate
-```env
-SQLSERVER_HOST=sql-server.company.com
-SQLSERVER_PORT=1433
-SQLSERVER_ENCRYPT=true
-SQLSERVER_TRUST_CERT=true
+```yaml
+connections:
+  main:
+    host: sql-server.company.com
+    port: 1433
+    encrypt: true
+    trustServerCertificate: true
 ```
 
 ### SQL Server Express (Local Development)
-```env
-SQLSERVER_HOST=localhost\\SQLEXPRESS
-SQLSERVER_PORT=1433
-SQLSERVER_ENCRYPT=false
-SQLSERVER_TRUST_CERT=true
+```yaml
+connections:
+  main:
+    host: localhost\SQLEXPRESS
+    port: 1433
+    encrypt: false
+    trustServerCertificate: true
 ```
 
 ### Docker SQL Server
-```env
-SQLSERVER_HOST=localhost
-SQLSERVER_PORT=1433
-SQLSERVER_USER=sa
-SQLSERVER_ENCRYPT=false
-SQLSERVER_TRUST_CERT=true
+```yaml
+connections:
+  main:
+    host: localhost
+    port: 1433
+    user: sa
+    encrypt: false
+    trustServerCertificate: true
 ```
 
-## Environment Variables Reference
+## Configuration Reference
+
+The server reads exactly one environment variable:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SQLSERVER_HOST` | ✅ | - | SQL Server hostname or IP |
-| `SQLSERVER_USER` | ✅ | - | Database username |
-| `SQLSERVER_PASSWORD` | ✅ | - | Database password |
-| `SQLSERVER_DATABASE` | ❌ | `master` | Default database |
-| `SQLSERVER_PORT` | ❌ | `1433` | SQL Server port |
-| `SQLSERVER_ENCRYPT` | ❌ | `true` | Enable TLS encryption |
-| `SQLSERVER_TRUST_CERT` | ❌ | `true` | Trust server certificate |
-| `SQLSERVER_CONNECTION_TIMEOUT` | ❌ | `30000` | Connection timeout (ms) |
-| `SQLSERVER_REQUEST_TIMEOUT` | ❌ | `60000` | Query timeout (ms) |
-| `SQLSERVER_MAX_ROWS` | ❌ | `1000` | Max rows per query |
+| `SQLSERVER_CONFIG_FILE` | ✅ | - | Path to the JSON/YAML connections file |
+
+Everything else is expressed as fields inside that file. Top-level keys are `default` (optional connection name; when only one connection is defined it becomes the default automatically), `domainSourcePath` (optional), and `connections` (required — a map of name → connection). Each connection accepts:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `host` (or `server`) | - | SQL Server hostname or IP |
+| `user` | - | Database username |
+| `password` | - | Database password |
+| `database` | `master` | Default database |
+| `authMode` | `sql` | `sql`, `aad-default`, `aad-password`, or `aad-service-principal` |
+| `clientId` | - | AAD application (client) ID |
+| `clientSecret` | - | AAD client secret |
+| `tenantId` | - | AAD tenant ID |
+| `port` | `1433` | SQL Server port (number) |
+| `encrypt` | `true` | Enable TLS encryption (boolean) |
+| `trustServerCertificate` | `false` | Trust server certificate (boolean; set `true` for self-signed certs) |
+| `connectionTimeout` | `30000` | Connection timeout in ms (number) |
+| `requestTimeout` | `60000` | Query timeout in ms (number) |
+| `maxRows` | `1000` | Max rows per query (number) |
+| `schemaCachePath` | - | Path to the schema cache for this connection |
 
 ## Troubleshooting
 
@@ -221,11 +272,11 @@ SQLSERVER_TRUST_CERT=true
 3. Ensure user has necessary permissions
 
 **"Certificate validation failed"**
-- Set `SQLSERVER_TRUST_CERT=true` for self-signed certificates
+- Set `trustServerCertificate: true` on the connection for self-signed certificates
 - For production: Use proper SSL certificates
 
 **"Timeout errors"**
-- Increase `SQLSERVER_CONNECTION_TIMEOUT`
+- Increase `connectionTimeout` on the connection
 - Check network latency
 - Verify SQL Server performance
 
@@ -250,7 +301,7 @@ SQLSERVER_TRUST_CERT=true
 ## Next Steps
 
 1. ✅ Install the package
-2. ✅ Configure environment variables
+2. ✅ Create the connections file
 3. ✅ Test connection
 4. ✅ Configure your MCP client
 5. 🎉 Start exploring your databases with AI!

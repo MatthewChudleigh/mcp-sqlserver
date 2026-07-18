@@ -103,7 +103,7 @@ export class SqlServerConnection {
       }
       case 'aad-password': {
         if (!this.config.user || !this.config.password || !this.config.clientId) {
-          throw new Error('aad-password requires SQLSERVER_USER, SQLSERVER_PASSWORD, and SQLSERVER_CLIENT_ID');
+          throw new Error('aad-password requires "user", "password", and "clientId"');
         }
         (sqlConfig as any).authentication = {
           type: 'azure-active-directory-password',
@@ -118,7 +118,7 @@ export class SqlServerConnection {
       }
       case 'aad-service-principal': {
         if (!this.config.clientId || !this.config.clientSecret || !this.config.tenantId) {
-          throw new Error('aad-service-principal requires SQLSERVER_CLIENT_ID, SQLSERVER_CLIENT_SECRET, and SQLSERVER_TENANT_ID');
+          throw new Error('aad-service-principal requires "clientId", "clientSecret", and "tenantId"');
         }
         (sqlConfig as any).authentication = {
           type: 'azure-active-directory-service-principal-secret',

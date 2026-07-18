@@ -66,40 +66,48 @@ npm run build
    az login
    ```
 
-3. Register the MCP server:
+3. Create a connections file, e.g. `~/.config/mcp-sqlserver/connections.yaml`. Keep it out of source control — it holds credentials.
 
-   ```bash
-   claude mcp add mssql-readonly --scope project -- node .claude/mcp-sqlserver/dist/index.js
+   ```yaml
+   default: main
+   # Optional: enrich the schema cache from a C# EF project
+   # domainSourcePath: /path/to/your-csharp-project
+   connections:
+     main:
+       host: your-server.database.windows.net
+       database: your-database
+       authMode: aad-default
+       encrypt: true
+       trustServerCertificate: false
    ```
+
+   > **`domainSourcePath`** is optional. Set it to the root of a C# project that contains `EntityFramework/Domain/Configurations/` to enrich the schema cache with entity-to-table mappings, column renames, and relationship metadata. Omit it if you don't use EF configurations.
+
+4. Register the MCP server, pointing it at the file:
 
    ```bash
    claude mcp add mssql-readonly -s user \
-     -e SQLSERVER_HOST=your-server.database.windows.net \
-     -e SQLSERVER_DATABASE=your-database \
-     -e SQLSERVER_AUTH_MODE=aad-default \
-     -e SQLSERVER_ENCRYPT=true \
-     -e SQLSERVER_TRUST_CERT=false \
-     -e SQLSERVER_DOMAIN_SOURCE_PATH=/path/to/your-csharp-project \
+     -e SQLSERVER_CONFIG_FILE=~/.config/mcp-sqlserver/connections.yaml \
      -- node ~/.claude/mcp-sqlserver/dist/index.js
    ```
 
-   > **`SQLSERVER_DOMAIN_SOURCE_PATH`** is optional. Set it to the root of a C# project that contains `EntityFramework/Domain/Configurations/` to enrich the schema cache with entity-to-table mappings, column renames, and relationship metadata. Omit it if you don't use EF configurations.
-
 #### Option B: SQL Server authentication
 
-```bash
-claude mcp add mssql-readonly -s user \
-  -e SQLSERVER_HOST=your-server.database.windows.net \
-  -e SQLSERVER_DATABASE=your-database \
-  -e SQLSERVER_USER=your-username \
-  -e SQLSERVER_PASSWORD=your-password \
-  -e SQLSERVER_ENCRYPT=true \
-  -e SQLSERVER_TRUST_CERT=false \
-  -e SQLSERVER_DOMAIN_SOURCE_PATH=/path/to/your-csharp-project \
-  -- node ~/.claude/mcp-sqlserver/dist/index.js
+Use the same steps, with a SQL-auth connection in the file:
+
+```yaml
+default: main
+connections:
+  main:
+    host: your-server.database.windows.net
+    database: your-database
+    user: your-username
+    password: your-password
+    encrypt: true
+    trustServerCertificate: false
 ```
 
-For on-premises SQL Server with self-signed certificates, set `SQLSERVER_TRUST_CERT=true`.
+For on-premises SQL Server with self-signed certificates, set `trustServerCertificate: true`.
 
 ### Step 3: Verify
 
@@ -147,11 +155,11 @@ This means Claude Code gets full schema context on the first query — no extra 
 
 **To refresh the cache** after schema changes, call the `snapshot_schema` tool.
 
-**To use a custom cache path**, set the `SQLSERVER_SCHEMA_CACHE_PATH` environment variable.
+**To use a custom cache path**, add a `schemaCachePath` field to that connection in the config file.
 
 ### Domain Entity Mappings (Optional)
 
-If you work with a C# project that uses Entity Framework, set `SQLSERVER_DOMAIN_SOURCE_PATH` to the project root containing `EntityFramework/Domain/Configurations/` files. The schema cache will be enriched with:
+If you work with a C# project that uses Entity Framework, set the top-level `domainSourcePath` in the config file to the project root containing `EntityFramework/Domain/Configurations/` files. The schema cache will be enriched with:
 
 - Entity-to-table name mappings (e.g., `WorkoutRecord` -> `CyclingActivity` table)
 - Property-to-column renames
@@ -160,76 +168,65 @@ If you work with a C# project that uses Entity Framework, set `SQLSERVER_DOMAIN_
 
 This helps Claude translate domain concepts to accurate SQL queries.
 
-## Environment Variables
+## Configuration
 
-| Variable                       | Required              | Default      | Description                                          |
-| ------------------------------ | --------------------- | ------------ | ---------------------------------------------------- |
-| `SQLSERVER_HOST`               | Yes                   | `localhost`  | Server hostname                                      |
-| `SQLSERVER_DATABASE`           | No                    | `master`     | Default database                                     |
-| `SQLSERVER_AUTH_MODE`          | No                    | `sql`        | Azure AD Auth Mode                                   |
-| `SQLSERVER_USER`               | For SQL auth          |              | SQL Server username                                  |
-| `SQLSERVER_PASSWORD`           | For SQL auth          |              | SQL Server password                                  |
-| `SQLSERVER_CLIENT_ID`          | No                    |              | Azure AD application (client) ID                     |
-| `SQLSERVER_CLIENT_SECRET`      | For service principal |              | Azure AD client secret                               |
-| `SQLSERVER_TENANT_ID`          | No                    |              | Azure AD tenant ID                                   |
-| `SQLSERVER_PORT`               | No                    | `1433`       | Server port                                          |
-| `SQLSERVER_ENCRYPT`            | No                    | `true`       | Enable TLS encryption                                |
-| `SQLSERVER_TRUST_CERT`         | No                    | `true`       | Trust server certificate (set `false` for Azure SQL) |
-| `SQLSERVER_MAX_ROWS`           | No                    | `1000`       | Max rows per query (up to 10,000)                    |
-| `SQLSERVER_CONNECTION_TIMEOUT` | No                    | `30000`      | Connection timeout in ms                             |
-| `SQLSERVER_REQUEST_TIMEOUT`    | No                    | `60000`      | Query timeout in ms                                  |
-| `SQLSERVER_SCHEMA_CACHE_PATH`  | No                    | Auto-derived | Override schema cache file path                      |
-| `SQLSERVER_DOMAIN_SOURCE_PATH` | No                    |              | Path to C# project root with EF configurations       |
-| `SQLSERVER_CONFIG_FILE`        | No                    |              | Path to a JSON/YAML file describing multiple connections (see below) |
-| `SQLSERVER_CONNECTIONS`        | No                    |              | JSON string mapping name → connection config (inline alternative to the file) |
-| `SQLSERVER_DEFAULT_CONNECTION` | No                    | `default`    | Name of the connection used when no `connection` argument is given   |
+The server is configured entirely by a single JSON or YAML file. Point at it with the **one** environment variable the server reads:
 
-`SQLSERVER_HOST` is only required when you are **not** using `SQLSERVER_CONFIG_FILE` or `SQLSERVER_CONNECTIONS`.
+| Variable              | Required | Description                                                     |
+| --------------------- | -------- | --------------------------------------------------------------- |
+| `SQLSERVER_CONFIG_FILE` | Yes    | Path to a JSON/YAML file describing all connections (see below) |
+
+Everything else — connections, the default connection, the optional EF domain source — lives in that file. `~` and relative paths are resolved (relative to the current working directory).
+
+### Config file format
+
+```yaml
+# ~/.config/mcp-sqlserver/connections.yaml   (gitignored — holds credentials)
+
+# Which connection tools use when no "connection" argument is given.
+# Optional when only one connection is defined (it becomes the default).
+default: crid
+
+# Optional: C# project root with EF configurations, used to enrich the schema
+# cache for every connection.
+# domainSourcePath: /path/to/csharp-project
+
+connections:
+  crid:
+    host: db1.example.com
+    database: CRID
+    user: CridReadOnly
+    password: secret
+    trustServerCertificate: true
+    # Optional per-connection schema cache override:
+    # schemaCachePath: /path/to/crid.md
+  warehouse:
+    host: warehouse.example.com
+    database: DataWarehouse
+    user: reader
+    password: secret
+    maxRows: 5000
+```
+
+The file may be YAML (shown) or JSON — JSON is valid YAML, so both parse identically. A full annotated template is in [`examples/connections.example.yaml`](examples/connections.example.yaml).
+
+**Top-level keys:** `default` (optional), `domainSourcePath` (optional), `connections` (required).
+
+**Per-connection fields:** `host`/`server`, `database`, `authMode` (`sql` \| `aad-default` \| `aad-password` \| `aad-service-principal`), `user`, `password`, `clientId`, `clientSecret`, `tenantId`, `port` (default `1433`), `encrypt` (default `true`), `trustServerCertificate` (default `false`), `connectionTimeout` (ms, default `30000`), `requestTimeout` (ms, default `60000`), `maxRows` (default `1000`, up to 10,000), and an optional `schemaCachePath`.
 
 ## Multiple Connections
 
-The server can register any number of named connections. Every tool accepts an optional `connection` argument to target one of them, and the `list_connections` tool reports what's configured. There are three ways to define them, and they can be combined:
-
-1. **Config file (recommended)** — set `SQLSERVER_CONFIG_FILE` to the path of a JSON or YAML file. This is the cleanest option for more than one connection: it's a real file (comments allowed, no JSON-in-a-string escaping), lives outside your committed config, and is shared across projects.
-
-   ```jsonc
-   // .mcp.json — carries only a path, nothing secret
-   "env": { "SQLSERVER_CONFIG_FILE": "${SQLSERVER_CONFIG_FILE:-~/.config/mcp-sqlserver/connections.yaml}" }
-   ```
-
-   ```yaml
-   # ~/.config/mcp-sqlserver/connections.yaml   (gitignored)
-   default: crid
-   connections:
-     crid:
-       host: db1.example.com
-       database: CRID
-       user: CridReadOnly
-       password: secret
-       trustServerCertificate: true
-     warehouse:
-       host: warehouse.example.com
-       database: DataWarehouse
-       user: reader
-       password: secret
-       maxRows: 5000
-   ```
-
-   A full annotated template is in [`examples/connections.example.yaml`](examples/connections.example.yaml). Each connection accepts the same fields as the default connection (`host`/`server`, `database`, `authMode`, `user`, `password`, `clientId`, `clientSecret`, `tenantId`, `port`, `encrypt`, `trustServerCertificate`, `maxRows`, and an optional `schemaCachePath`).
-
-2. **Inline JSON** — set `SQLSERVER_CONNECTIONS` to a JSON string with the same `name → config` shape (no top-level `default`/`domainSourcePath` keys — those come from env vars). Handy for a single extra connection without a file.
-
-3. **Default connection** — the flat `SQLSERVER_HOST`/`SQLSERVER_USER`/… vars register a connection named `default`.
-
-`SQLSERVER_DEFAULT_CONNECTION` (env) overrides the file's `default:` field. Names must be unique across all three sources; a collision fails fast at startup.
+The server can register any number of named connections — just add more entries under `connections:`. Every tool accepts an optional `connection` argument to target one of them, and the `list_connections` tool reports what's configured. Connection names must be unique; a collision fails fast at startup. The `default:` field selects which one is used when no `connection` argument is given (or the sole connection, when only one is defined).
 
 ## Azure AD Auth Modes
 
-| Mode                    | Use Case                        | Credential Source                                                                |
-| ----------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
-| `aad-default`           | Developer machines, Azure VMs   | `az login`, managed identity, env vars — tries multiple sources automatically    |
-| `aad-password`          | Username/password with Azure AD | Requires `SQLSERVER_USER`, `SQLSERVER_PASSWORD`, `SQLSERVER_CLIENT_ID`           |
-| `aad-service-principal` | CI/CD, automation               | Requires `SQLSERVER_CLIENT_ID`, `SQLSERVER_CLIENT_SECRET`, `SQLSERVER_TENANT_ID` |
+Set `authMode` on the connection. Credentials come from the connection's fields in the config file:
+
+| Mode                    | Use Case                        | Credential Source                                                             |
+| ----------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `aad-default`           | Developer machines, Azure VMs   | `az login`, managed identity, env — tries multiple sources automatically      |
+| `aad-password`          | Username/password with Azure AD | Requires `user`, `password`, `clientId`                                        |
+| `aad-service-principal` | CI/CD, automation               | Requires `clientId`, `clientSecret`, `tenantId`                               |
 
 ## Troubleshooting
 
@@ -241,14 +238,14 @@ The server can register any number of named connections. Every tool accepts an o
 ### Connection refused / timeout
 - Verify the server hostname and port are correct
 - Check firewall rules — Azure SQL requires your IP to be allowed
-- For Azure SQL, ensure `SQLSERVER_ENCRYPT=true` and `SQLSERVER_TRUST_CERT=false`
+- For Azure SQL, ensure `encrypt: true` and `trustServerCertificate: false` on the connection
 
 ### Permission errors on queries
 - The account needs at minimum `db_datareader` role membership
 - For schema discovery, access to `INFORMATION_SCHEMA` views and `sys.` catalog views is required
 
 ### Schema cache not generating
-- Ensure the server process has write access to its install directory (or set `SQLSERVER_SCHEMA_CACHE_PATH` to a writable location)
+- Ensure the server process has write access to its install directory (or set a `schemaCachePath` in the config file pointing to a writable location)
 - Check stderr output for errors: `claude mcp list` shows server logs on failure
 
 ---
@@ -304,37 +301,47 @@ Once Azure CLI is confirmed installed, run `az account show --query "{name:name,
 - If signed in, confirm the account shown is the one with database access. If not, tell the user to run `az login` and sign in with the correct account.
 - If not signed in (error), tell the user to run `az login` and complete the browser sign-in flow, then re-run `az account show` to confirm.
 
-### Step 4: Register the MCP server
+### Step 4: Create the connections file
+
+All connection details live in a JSON/YAML file — the server reads no other environment variables. Create one at `~/.config/mcp-sqlserver/connections.yaml` (keep it out of source control). If the user has a C# project with EF configurations, ask for the path and add a top-level `domainSourcePath:` — this is optional.
+
+For Azure AD:
+```yaml
+default: main
+# domainSourcePath: <path-to-csharp-project>   # optional
+connections:
+  main:
+    host: <server>
+    database: <database>
+    authMode: aad-default
+    encrypt: true
+    trustServerCertificate: false
+```
+
+For SQL auth:
+```yaml
+default: main
+# domainSourcePath: <path-to-csharp-project>   # optional
+connections:
+  main:
+    host: <server>
+    database: <database>
+    user: <username>
+    password: <password>
+    encrypt: true
+    trustServerCertificate: false
+```
+
+### Step 4b: Register the MCP server
 
 Use the **absolute path** to the built entry point:
 - **Windows:** `C:/Users/<username>/.claude/mcp-sqlserver/dist/index.js`
 - **macOS:** `/Users/<username>/.claude/mcp-sqlserver/dist/index.js`
 - **Linux:** `/home/<username>/.claude/mcp-sqlserver/dist/index.js`
 
-If the user has a C# project with EF configurations, ask for the path and include `-e SQLSERVER_DOMAIN_SOURCE_PATH=<path>`. This is optional.
-
-For Azure AD:
 ```bash
 claude mcp add mssql-readonly -s user \
-  -e SQLSERVER_HOST=<server> \
-  -e SQLSERVER_DATABASE=<database> \
-  -e SQLSERVER_AUTH_MODE=aad-default \
-  -e SQLSERVER_ENCRYPT=true \
-  -e SQLSERVER_TRUST_CERT=false \
-  -e SQLSERVER_DOMAIN_SOURCE_PATH=<path-to-csharp-project> \
-  -- node <ABSOLUTE_PATH>/dist/index.js
-```
-
-For SQL auth:
-```bash
-claude mcp add mssql-readonly -s user \
-  -e SQLSERVER_HOST=<server> \
-  -e SQLSERVER_DATABASE=<database> \
-  -e SQLSERVER_USER=<username> \
-  -e SQLSERVER_PASSWORD=<password> \
-  -e SQLSERVER_ENCRYPT=true \
-  -e SQLSERVER_TRUST_CERT=false \
-  -e SQLSERVER_DOMAIN_SOURCE_PATH=<path-to-csharp-project> \
+  -e SQLSERVER_CONFIG_FILE=~/.config/mcp-sqlserver/connections.yaml \
   -- node <ABSOLUTE_PATH>/dist/index.js
 ```
 

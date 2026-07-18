@@ -8,11 +8,11 @@
 # and reference secrets from your OS environment where you can.
 
 # Which connection tools use when no "connection" argument is given.
-# Overridden by the SQLSERVER_DEFAULT_CONNECTION env var if that is set.
+# Optional when only one connection is defined below (it becomes the default).
 default: crid
 
 # Optional: path to a C# project root with EF configurations, used to enrich the
-# generated schema cache. Overridden by SQLSERVER_DOMAIN_SOURCE_PATH.
+# generated schema cache for every connection.
 # domainSourcePath: C:/Source/DevOps/ev-braze-connector/tmp/schema/domain
 
 connections:

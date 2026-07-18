@@ -19,8 +19,8 @@ export const ConnectionConfigSchema = z.object({
 
 export type ConnectionConfig = z.infer<typeof ConnectionConfigSchema>;
 
-// Schema for entries in SQLSERVER_CONNECTIONS JSON. Accepts either `server`
-// or `host` for the hostname so the keys mirror SQLSERVER_HOST naming.
+// Schema for a single connection entry in the config file. Accepts either
+// `server` or `host` for the hostname.
 export const NamedConnectionInputSchema = z.object({
   server: z.string().optional(),
   host: z.string().optional(),
@@ -55,11 +55,11 @@ export type NamedConnectionsMap = z.infer<typeof NamedConnectionsMapSchema>;
 // multi-connection setup can live in one commented, gitignored file instead of
 // a JSON string crammed into an env var.
 export const ConnectionFileSchema = z.object({
-  // Name of the connection to treat as the default. Overridden by the
-  // SQLSERVER_DEFAULT_CONNECTION env var when that is set.
+  // Name of the connection to treat as the default. Optional when the file
+  // defines exactly one connection (that connection becomes the default).
   default: z.string().optional(),
   // Path to a C# project root with EF configurations, used to enrich the schema
-  // cache. Overridden by the SQLSERVER_DOMAIN_SOURCE_PATH env var when set.
+  // cache for every connection.
   domainSourcePath: z.string().optional(),
   connections: NamedConnectionsMapSchema,
 });
